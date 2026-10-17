@@ -7,9 +7,6 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/brand_mark.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
-import '../providers/fake_auth_role_provider.dart';
-import '../../../learner/presentation/screens/learner_home_screen.dart';
-import '../../../tutor/presentation/screens/tutor_home_screen.dart';
 
 enum AuthAudience { tutor, learnerOrParent }
 
@@ -91,7 +88,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     });
   }
 
-  void _showMessage(String message) {
+  void showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -102,48 +99,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
     setState(() => _isSubmitting = false);
-
-    final selectedRole = _isTutor
-        ? FakeAuthRole.tutor
-        : _seekingRole == _SeekingRole.student
-        ? FakeAuthRole.student
-        : FakeAuthRole.parent;
-    if (_isSignUp) {
-      ref.read(fakeAuthRoleProvider.notifier).state = selectedRole;
-    }
-    final role = _isSignUp ? selectedRole : ref.read(fakeAuthRoleProvider);
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        icon: Icon(
-          Icons.check_circle_outline_rounded,
-          color: Theme.of(context).colorScheme.primary,
-          size: 34,
-        ),
-        title: Text(_isSignUp ? 'Account ready' : 'Signed in'),
-        content: Text(
-          'Demo ${role.name} authentication succeeded. No account information was sent to a server.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted) return;
-    final destination = role == FakeAuthRole.tutor
-        ? TutorHomeScreen(onThemeModeChanged: widget.onThemeModeChanged)
-        : LearnerHomeScreen(onThemeModeChanged: widget.onThemeModeChanged);
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(builder: (_) => destination),
-      (route) => false,
-    );
+    // Real Auth handlers will be hooked in F1b & F1c
   }
 
   @override
@@ -349,9 +308,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
-                                onPressed: () => _showMessage(
-                                  'Password reset will be available soon.',
-                                ),
+                                onPressed: () {},
                                 child: const Text('Forgot password?'),
                               ),
                             ),
@@ -394,9 +351,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                 color: Theme.of(context).colorScheme.primary,
                               ),
                               isFullWidth: true,
-                              onPressed: () => _showMessage(
-                                'Google sign-in will be available soon.',
-                              ),
+                              onPressed: () {},
                             ),
                           ],
                           const SizedBox(height: AppSpacing.lg),
@@ -417,11 +372,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                 ),
                               ),
                             ],
-                          ),
-                          Text(
-                            'Demo authentication only. Details stay on this device.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
                       ),
