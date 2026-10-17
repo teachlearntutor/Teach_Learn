@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "920270768909",
+    "project_id": "teachlearn",
+    "storage_bucket": "teachlearn.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:920270768909:android:18f22719276d11cd267e44",
+        "android_client_info": {
+          "package_name": "com.teachlearn.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "920270768909-9l7sklj03ibd7285c8n515a8vbbl99s9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.teachlearn.app",
+            "certificate_hash": "db1839d0215b23d97701424bbfc7e1873d5d49d7"
+          }
+        },
+        {
+          "client_id": "920270768909-tcueboq3pt1obkvvabtam31fb1svmntq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB7j3abrF2HxRmYk2_texamYMOxgdUlW7c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "920270768909-tcueboq3pt1obkvvabtam31fb1svmntq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "920270768909-6iddlskl1ii5mm6io9r9jo8l78ajuf21.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.teachlearn.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
