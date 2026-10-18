@@ -73,6 +73,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Tutor students tab shows seeded students and detail screen', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const TutorHomeScreen(),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Students'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Ayesha Khan'), findsOneWidget);
+    expect(find.text('Hamza Raza'), findsOneWidget);
+
+    await tester.tap(find.text('Ayesha Khan'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(find.text('Parent contact'), findsOneWidget);
+    expect(find.textContaining('% attendance'), findsOneWidget);
+  });
+
   testWidgets('Tutor navigation has five tabs and no Fees tab', (
     WidgetTester tester,
   ) async {
@@ -87,7 +113,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsAtLeastNWidgets(1));
-    expect(find.text('Students'), findsOneWidget);
+    expect(find.text('Students'), findsAtLeastNWidgets(1));
     expect(find.text('Schedule'), findsOneWidget);
     expect(find.text('Attendance'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);

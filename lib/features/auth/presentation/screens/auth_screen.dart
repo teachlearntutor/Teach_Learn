@@ -7,6 +7,10 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/brand_mark.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
+import '../providers/auth_providers.dart';
+import 'google_role_selection_screen.dart';
+import '../../../learner/presentation/screens/learner_home_screen.dart';
+import '../../../tutor/presentation/screens/tutor_home_screen.dart';
 
 enum AuthAudience { tutor, learnerOrParent }
 
@@ -30,13 +34,20 @@ class AuthScreen extends ConsumerStatefulWidget {
 
 class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
   AuthMode _mode = AuthMode.logIn;
   AuthAudience _audience = AuthAudience.tutor;
   _SeekingRole _seekingRole = _SeekingRole.student;
+
   bool _showPassword = false;
   bool _showConfirmation = false;
   bool _isSubmitting = false;
+  bool _isGoogleSubmitting = false;
+  bool _isResettingPassword = false;
   bool _showHeader = false;
 
   bool get _isTutor => _audience == AuthAudience.tutor;
@@ -53,13 +64,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  String get _selectedRoleString {
+    if (_isTutor) return 'tutor';
+    return _seekingRole == _SeekingRole.student ? 'student' : 'parent';
   }
 
   String? _validateName(String? value) {
     if (value == null || value.trim().length < 2) {
-      return 'Enter your name';
+      return 'Enter your full name';
     }
     return null;
   }
@@ -88,10 +107,88 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     });
   }
 
-  void showMessage(String message) {
+  void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.success,
+        ),
+      );
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+      _showErrorSnackBar('Please enter a valid email address in the field above first.');
+      return;
+    }
+
+    setState(() => _isResettingPassword = true);
+    try {
+      final repo = ref.read(authRepositoryProvider);
+      await repo.sendPasswordResetEmail(email);
+      if (!mounted) return;
+      _showSuccessSnackBar('Password reset email sent to $email. Please check your inbox.');
+    } catch (e) {
+      if (!mounted) return;
+      _showErrorSnackBar(e.toString());
+    } finally {
+      if (mounted) setState(() => _isResettingPassword = false);
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    FocusScope.of(context).unfocus();
+    setState(() => _isGoogleSubmitting = true);
+
+    try {
+      final authRepo = ref.read(authRepositoryProvider);
+      final result = await authRepo.signInWithGoogle();
+
+      if (!mounted) return;
+
+      if (result.isNewUser) {
+        // New Google user -> show role selection screen
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GoogleRoleSelectionScreen(user: result.user),
+          ),
+        );
+      } else {
+        // Existing user -> navigate straight home based on role
+        final role = result.existingRole ?? 'tutor';
+        final destination = role == 'tutor'
+            ? const TutorHomeScreen()
+            : const LearnerHomeScreen();
+
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(builder: (_) => destination),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      if (e.toString().contains('cancelled')) {
+        _showErrorSnackBar('Google sign-in was cancelled.');
+      } else {
+        _showErrorSnackBar(e.toString());
+      }
+    } finally {
+      if (mounted) setState(() => _isGoogleSubmitting = false);
+    }
   }
 
   Future<void> _submit() async {
@@ -99,10 +196,53 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    // Real Auth handlers will be hooked in F1b & F1c
+
+    try {
+      final authRepo = ref.read(authRepositoryProvider);
+
+      if (_isSignUp) {
+        // Handle Email Sign Up
+        await authRepo.signUpWithEmail(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          role: _selectedRoleString,
+        );
+
+        if (!mounted) return;
+        final destination = _selectedRoleString == 'tutor'
+            ? const TutorHomeScreen()
+            : const LearnerHomeScreen();
+
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(builder: (_) => destination),
+          (route) => false,
+        );
+      } else {
+        // Handle Email Log In
+        final user = await authRepo.logInWithEmail(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        final role = await authRepo.getUserRole(user.uid);
+
+        if (!mounted) return;
+        final destination = (role == 'tutor')
+            ? const TutorHomeScreen()
+            : const LearnerHomeScreen();
+
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(builder: (_) => destination),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showErrorSnackBar(e.toString());
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -233,7 +373,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                 if (_isSignUp) ...[
                                   AppTextField(
                                     label: 'Full name',
-                                    hint: 'Your name',
+                                    hint: 'Your full name',
+                                    controller: _nameController,
                                     textCapitalization: TextCapitalization.words,
                                     textInputAction: TextInputAction.next,
                                     autofillHints: const [AutofillHints.name],
@@ -244,6 +385,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                 AppTextField(
                                   label: 'Email address',
                                   hint: 'name@example.com',
+                                  controller: _emailController,
                                   keyboardType: TextInputType.emailAddress,
                                   textInputAction: TextInputAction.next,
                                   autofillHints: const [AutofillHints.email],
@@ -276,6 +418,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                   AppTextField(
                                     label: 'Confirm password',
                                     hint: 'Re-enter your password',
+                                    controller: _confirmPasswordController,
                                     obscureText: !_showConfirmation,
                                     textInputAction: TextInputAction.done,
                                     validator: (value) {
@@ -308,8 +451,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
-                                onPressed: () {},
-                                child: const Text('Forgot password?'),
+                                onPressed: _isResettingPassword ? null : _handleForgotPassword,
+                                child: _isResettingPassword
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : const Text('Forgot password?'),
                               ),
                             ),
                           ] else ...[
@@ -325,35 +474,34 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             isFullWidth: true,
                             onPressed: _isSubmitting ? null : _submit,
                           ),
-                          if (!_isSignUp) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            Row(
-                              children: [
-                                const Expanded(child: Divider()),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.md,
-                                  ),
-                                  child: Text(
-                                    'or',
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
+                          const SizedBox(height: AppSpacing.md),
+                          Row(
+                            children: [
+                              const Expanded(child: Divider()),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.md,
                                 ),
-                                const Expanded(child: Divider()),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            AppButton.secondary(
-                              label: 'Continue with Google',
-                              icon: Icon(
-                                Icons.g_mobiledata_rounded,
-                                size: 26,
-                                color: Theme.of(context).colorScheme.primary,
+                                child: Text(
+                                  'or',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
                               ),
-                              isFullWidth: true,
-                              onPressed: () {},
+                              const Expanded(child: Divider()),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          AppButton.secondary(
+                            label: 'Continue with Google',
+                            isLoading: _isGoogleSubmitting,
+                            icon: Icon(
+                              Icons.g_mobiledata_rounded,
+                              size: 26,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
-                          ],
+                            isFullWidth: true,
+                            onPressed: _isGoogleSubmitting ? null : _handleGoogleSignIn,
+                          ),
                           const SizedBox(height: AppSpacing.lg),
                           Wrap(
                             alignment: WrapAlignment.center,
