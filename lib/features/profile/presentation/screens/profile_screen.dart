@@ -17,9 +17,6 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/presentation/screens/auth_screen.dart';
 import '../providers/profile_providers.dart';
 
-const String _kAvatarColorKey = 'pref_avatar_color_index';
-const String _kProfileImagePathKey = 'pref_profile_image_path';
-
 const List<Color> _kAvatarColors = [
   AppColors.primaryTeal,
   AppColors.accentTeal,
@@ -30,6 +27,10 @@ const List<Color> _kAvatarColors = [
   Color(0xFF8E24AA), // Purple Accent
   Color(0xFF00897B), // Deep Teal
 ];
+
+/// User-scoped preference key helpers to prevent cross-account profile picture leakage
+String _getProfileImageKey(String uid) => 'pref_profile_image_path_${uid.isEmpty ? "guest" : uid}';
+String _getAvatarColorKey(String uid) => 'pref_avatar_color_key_${uid.isEmpty ? "guest" : uid}';
 
 /// Feature-rich, production-ready Profile & Settings Screen.
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -47,14 +48,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _loadProfilePreferences();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProfilePreferences();
+    });
   }
 
   Future<void> _loadProfilePreferences() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      final uid = user?.uid ?? '';
       final prefs = await SharedPreferences.getInstance();
-      final index = prefs.getInt(_kAvatarColorKey) ?? 0;
-      final imagePath = prefs.getString(_kProfileImagePathKey);
+
+      final index = prefs.getInt(_getAvatarColorKey(uid)) ?? 0;
+      final imagePath = prefs.getString(_getProfileImageKey(uid));
 
       if (mounted) {
         setState(() {
@@ -63,6 +69,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           }
           if (imagePath != null && File(imagePath).existsSync()) {
             _profileImagePath = imagePath;
+          } else {
+            _profileImagePath = null;
           }
         });
       }
@@ -70,15 +78,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _setAvatarColor(int index) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid ?? '';
     setState(() => _selectedAvatarColorIndex = index);
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(_kAvatarColorKey, index);
+      await prefs.setInt(_getAvatarColorKey(uid), index);
     } catch (_) {}
   }
 
   Future<void> _pickImageFromGallery() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      final uid = user?.uid ?? '';
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.gallery,
@@ -89,7 +102,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
       if (image != null) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_kProfileImagePathKey, image.path);
+        await prefs.setString(_getProfileImageKey(uid), image.path);
 
         if (mounted) {
           setState(() {
@@ -98,7 +111,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Profile photo updated successfully!'),
+              content: Text('Profile photo updated for your account!'),
               backgroundColor: AppColors.success,
             ),
           );
@@ -117,8 +130,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _removeProfileImage() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      final uid = user?.uid ?? '';
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kProfileImagePathKey);
+      await prefs.remove(_getProfileImageKey(uid));
+
       if (mounted) {
         setState(() {
           _profileImagePath = null;
@@ -130,6 +146,57 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         );
       }
     } catch (_) {}
+  }
+
+  void _viewProfilePicture(String displayName, Color avatarColor) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Scaffold(
+        backgroundColor: Colors.black.withValues(alpha: 0.95),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          title: Text(displayName, style: const TextStyle(color: Colors.white)),
+        ),
+        body: Center(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_profileImagePath != null && File(_profileImagePath!).existsSync())
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.file(
+                      File(_profileImagePath!),
+                      fit: BoxFit.contain,
+                      width: MediaQuery.of(context).size.width * 0.85,
+                    ),
+                  )
+                else
+                  CircleAvatar(
+                    radius: 90,
+                    backgroundColor: avatarColor,
+                    child: Text(
+                      displayName.isNotEmpty ? displayName[0].toUpperCase() : 'T',
+                      style: const TextStyle(
+                        fontSize: 72,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 24),
+                Text(
+                  displayName,
+                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -198,7 +265,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
   }
 
-  Future<void> _showAvatarOptionsBottomSheet() async {
+  Future<void> _showAvatarOptionsBottomSheet(String displayName, Color avatarColor) async {
     await showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -211,15 +278,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Change Profile Picture',
+              'Profile Photo Options',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: AppSpacing.md),
 
             ListTile(
+              leading: const Icon(Icons.fullscreen_rounded, color: AppColors.primaryTeal),
+              title: const Text('View Profile Picture'),
+              subtitle: const Text('View picture in full resolution'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _viewProfilePicture(displayName, avatarColor);
+              },
+            ),
+            const Divider(),
+            ListTile(
               leading: const Icon(Icons.photo_library_outlined, color: AppColors.primaryTeal),
               title: const Text('Choose Photo from Gallery'),
-              subtitle: const Text('Upload a photo from your device'),
+              subtitle: const Text('Upload a new photo for your account'),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _pickImageFromGallery();
@@ -541,49 +618,52 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               children: [
-                Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 40,
-                      backgroundColor: avatarColor,
-                      backgroundImage: _profileImagePath != null
-                          ? FileImage(File(_profileImagePath!))
-                          : null,
-                      child: _profileImagePath == null
-                          ? Text(
-                              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'T',
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                GestureDetector(
+                  onTap: () => _viewProfilePicture(displayName, avatarColor),
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 40,
+                        backgroundColor: avatarColor,
+                        backgroundImage: _profileImagePath != null
+                            ? FileImage(File(_profileImagePath!))
+                            : null,
+                        child: _profileImagePath == null
+                            ? Text(
+                                displayName.isNotEmpty ? displayName[0].toUpperCase() : 'T',
+                                style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: () => _showAvatarOptionsBottomSheet(displayName, avatarColor),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                                width: 1.5,
                               ),
-                            )
-                          : null,
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: GestureDetector(
-                        onTap: _showAvatarOptionsBottomSheet,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                              width: 1.5,
                             ),
-                          ),
-                          child: Icon(
-                            Icons.camera_alt_outlined,
-                            size: 16,
-                            color: isDark ? AppColors.primaryTealLight : AppColors.primaryTeal,
+                            child: Icon(
+                              Icons.camera_alt_outlined,
+                              size: 16,
+                              color: isDark ? AppColors.primaryTealLight : AppColors.primaryTeal,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Row(
