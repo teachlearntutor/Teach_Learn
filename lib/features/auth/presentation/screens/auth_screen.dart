@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/brand_mark.dart';
+import '../../../../core/widgets/google_brand_logo.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../providers/auth_providers.dart';
@@ -494,11 +495,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                           AppButton.secondary(
                             label: 'Continue with Google',
                             isLoading: _isGoogleSubmitting,
-                            icon: Icon(
-                              Icons.g_mobiledata_rounded,
-                              size: 26,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                            icon: const GoogleBrandLogo(size: 20),
                             isFullWidth: true,
                             onPressed: _isGoogleSubmitting ? null : _handleGoogleSignIn,
                           ),
