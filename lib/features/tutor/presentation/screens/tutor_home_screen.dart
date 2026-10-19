@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,8 +9,7 @@ import '../../../../core/widgets/status_chip.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
-import '../../../auth/presentation/screens/auth_screen.dart';
-import '../../../auth/presentation/widgets/email_verification_banner.dart';
+import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../schedule/presentation/providers/class_session_providers.dart';
 import '../../../students/presentation/providers/student_providers.dart';
 import '../../../students/presentation/screens/student_form_screen.dart';
@@ -37,17 +35,6 @@ class _TutorHomeScreenState extends ConsumerState<TutorHomeScreen> {
     'Profile',
   ];
 
-  Future<void> _logout() async {
-    await ref.read(authRepositoryProvider).signOut();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
-        builder: (_) => const AuthScreen(initialMode: AuthMode.logIn),
-      ),
-      (route) => false,
-    );
-  }
-
   void _addStudent() {
     Navigator.of(
       context,
@@ -57,29 +44,25 @@ class _TutorHomeScreenState extends ConsumerState<TutorHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      _TutorDashboardView(
-        onNavigateToStudents: () {
-          setState(() => _selectedIndex = 1);
-        },
-      ),
+      _TutorDashboardView(onNavigateToStudents: () {
+        setState(() => _selectedIndex = 1);
+      }),
       const StudentsScreen(),
       const _TutorScheduleTab(),
       const _TutorAttendanceTab(),
-      _ProfilePlaceholder(onLogout: _logout),
+      const ProfileScreen(),
     ];
 
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),
-        actions: [if (_selectedIndex != 4) const ThemeModeToggle()],
+        actions: [
+          if (_selectedIndex != 4)
+            const ThemeModeToggle(),
+        ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            const EmailVerificationBanner(),
-            Expanded(child: tabs[_selectedIndex]),
-          ],
-        ),
+        child: tabs[_selectedIndex],
       ),
       floatingActionButton: _selectedIndex == 1
           ? FloatingActionButton(
@@ -132,16 +115,14 @@ class _TutorDashboardView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    User? user;
+    dynamic user;
     try {
       user = ref.watch(authRepositoryProvider).currentUser;
     } catch (_) {}
 
     final uid = user?.uid ?? '';
     final displayName = user?.displayName ?? 'Tutor';
-    final profileState = uid.isNotEmpty
-        ? ref.watch(userProfileProvider(uid))
-        : null;
+    final profileState = uid.isNotEmpty ? ref.watch(userProfileProvider(uid)) : null;
     final publicId = profileState?.asData?.value?['publicId'] as String? ?? '';
 
     final studentsState = ref.watch(studentsProvider);
@@ -159,11 +140,7 @@ class _TutorDashboardView extends ConsumerWidget {
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: Theme.of(context).colorScheme.primary,
-                  child: const Icon(
-                    Icons.school_rounded,
-                    color: Colors.white,
-                    size: 26,
-                  ),
+                  child: const Icon(Icons.school_rounded, color: Colors.white, size: 26),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -182,14 +159,9 @@ class _TutorDashboardView extends ConsumerWidget {
                       if (publicId.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryTeal.withValues(
-                              alpha: 0.12,
-                            ),
+                            color: AppColors.primaryTeal.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -214,9 +186,7 @@ class _TutorDashboardView extends ConsumerWidget {
         // Stat Cards
         studentsState.when(
           data: (students) {
-            final activeCount = students
-                .where((s) => s.status.name == 'active')
-                .length;
+            final activeCount = students.where((s) => s.status.name == 'active').length;
             return Row(
               children: [
                 Expanded(
@@ -346,8 +316,9 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.xs),
             Text(
               value,
-              style: Theme.of(context).textTheme.headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(subtitle, style: Theme.of(context).textTheme.labelSmall),
@@ -368,10 +339,7 @@ class _TutorScheduleTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Text(
-          'Weekly Class Schedule',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        Text('Weekly Class Schedule', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: AppSpacing.md),
         sessionsState.when(
           data: (sessions) {
@@ -383,23 +351,19 @@ class _TutorScheduleTab extends ConsumerWidget {
               );
             }
             return Column(
-              children: sessions
-                  .map(
-                    (session) => Card(
-                      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          child: Icon(Icons.access_time_rounded),
-                        ),
-                        title: Text(session.subject),
-                        subtitle: Text(
-                          'Time: ${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')} (${session.durationMinutes} mins)',
-                        ),
-                        trailing: const StatusChip.present(label: 'Scheduled'),
-                      ),
-                    ),
-                  )
-                  .toList(),
+              children: sessions.map((session) => Card(
+                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.access_time_rounded),
+                  ),
+                  title: Text(session.subject),
+                  subtitle: Text(
+                    'Time: ${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')} (${session.durationMinutes} mins)',
+                  ),
+                  trailing: const StatusChip.present(label: 'Scheduled'),
+                ),
+              )).toList(),
             );
           },
           loading: () => const AppLoader.inline(),
@@ -420,10 +384,7 @@ class _TutorAttendanceTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Text(
-          'Class Attendance History',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        Text('Class Attendance History', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: AppSpacing.md),
         attendanceState.when(
           data: (records) {
@@ -442,22 +403,14 @@ class _TutorAttendanceTab extends ConsumerWidget {
                   margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: ListTile(
                     leading: Icon(
-                      isPresent
-                          ? Icons.check_circle_rounded
-                          : Icons.cancel_rounded,
-                      color: isPresent
-                          ? AppColors.success
-                          : (isAbsent ? AppColors.danger : AppColors.warning),
+                      isPresent ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                      color: isPresent ? AppColors.success : (isAbsent ? AppColors.danger : AppColors.warning),
                     ),
                     title: Text('Student ID: ${record.studentId}'),
-                    subtitle: Text(
-                      'Date: ${record.sessionDate.day}/${record.sessionDate.month}/${record.sessionDate.year}',
-                    ),
+                    subtitle: Text('Date: ${record.sessionDate.day}/${record.sessionDate.month}/${record.sessionDate.year}'),
                     trailing: isPresent
                         ? const StatusChip.present()
-                        : (isAbsent
-                              ? const StatusChip.absent()
-                              : const StatusChip.late()),
+                        : (isAbsent ? const StatusChip.absent() : const StatusChip.late()),
                   ),
                 );
               }).toList(),
@@ -465,97 +418,6 @@ class _TutorAttendanceTab extends ConsumerWidget {
           },
           loading: () => const AppLoader.inline(),
           error: (_, _) => const SizedBox.shrink(),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfilePlaceholder extends ConsumerWidget {
-  const _ProfilePlaceholder({required this.onLogout});
-
-  final VoidCallback onLogout;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    User? user;
-    try {
-      user = ref.watch(authRepositoryProvider).currentUser;
-    } catch (_) {}
-
-    final uid = user?.uid ?? '';
-    final displayName = user?.displayName ?? 'Tutor Profile';
-    final email = user?.email ?? 'No email available';
-
-    final profileState = uid.isNotEmpty
-        ? ref.watch(userProfileProvider(uid))
-        : null;
-    final publicId = profileState?.asData?.value?['publicId'] as String? ?? '';
-
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Theme.of(context)
-                      .colorScheme
-                      .primaryContainer,
-                  child: Icon(
-                    Icons.person_rounded,
-                    size: 32,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayName,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(email, style: Theme.of(context).textTheme.bodySmall),
-                      if (publicId.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Public ID: $publicId',
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Card(
-          child: Column(
-            children: [
-              const ListTile(
-                leading: Icon(Icons.palette_outlined),
-                title: Text('Theme Mode'),
-                trailing: ThemeModeToggle(),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.logout_rounded, color: Colors.red),
-                title: const Text(
-                  'Log out',
-                  style: TextStyle(color: Colors.red),
-                ),
-                onTap: onLogout,
-              ),
-            ],
-          ),
         ),
       ],
     );

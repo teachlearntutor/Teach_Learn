@@ -9,8 +9,7 @@ import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/status_chip.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
-import '../../../auth/presentation/screens/auth_screen.dart';
-import '../../../auth/presentation/widgets/email_verification_banner.dart';
+import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../schedule/presentation/providers/class_session_providers.dart';
 
 class LearnerHomeScreen extends ConsumerStatefulWidget {
@@ -25,19 +24,6 @@ class LearnerHomeScreen extends ConsumerStatefulWidget {
 class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
   int _selectedIndex = 0;
 
-  Future<void> _logout(BuildContext context) async {
-    await ref.read(authRepositoryProvider).signOut();
-    if (!context.mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
-        builder: (_) => const AuthScreen(
-          initialMode: AuthMode.logIn,
-        ),
-      ),
-      (route) => false,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     User? user;
@@ -47,7 +33,6 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
 
     final uid = user?.uid ?? '';
     final displayName = user?.displayName ?? 'User';
-    final email = user?.email ?? '';
 
     final profileState = uid.isNotEmpty ? ref.watch(userProfileProvider(uid)) : null;
     final profileData = profileState?.asData?.value;
@@ -240,48 +225,7 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
       ),
 
       // Profile Tab
-      ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(displayName, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 4),
-                  Text(email, style: Theme.of(context).textTheme.bodyMedium),
-                  if (publicId.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text('Public ID: $publicId', style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                  const SizedBox(height: 4),
-                  Text('Account Role: ${role.toUpperCase()}', style: Theme.of(context).textTheme.labelSmall),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Card(
-            child: Column(
-              children: [
-                const ListTile(
-                  leading: Icon(Icons.palette_outlined),
-                  title: Text('Theme Mode'),
-                  trailing: ThemeModeToggle(),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.logout_rounded, color: Colors.red),
-                  title: const Text('Log out', style: TextStyle(color: Colors.red)),
-                  onTap: () => _logout(context),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      const ProfileScreen(),
     ];
 
     return Scaffold(
@@ -292,12 +236,7 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            const EmailVerificationBanner(),
-            Expanded(child: tabs[_selectedIndex]),
-          ],
-        ),
+        child: tabs[_selectedIndex],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
