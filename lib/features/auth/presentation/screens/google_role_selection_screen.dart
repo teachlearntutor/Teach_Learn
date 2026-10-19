@@ -10,7 +10,7 @@ import '../../../learner/presentation/screens/learner_home_screen.dart';
 import '../../../tutor/presentation/screens/tutor_home_screen.dart';
 import '../providers/auth_providers.dart';
 
-/// Screen presented to new Google Sign-In users to choose their role before creating profile.
+/// Screen presented to users who need to choose a role to complete their profile.
 class GoogleRoleSelectionScreen extends ConsumerStatefulWidget {
   final User user;
 
@@ -31,8 +31,10 @@ class _GoogleRoleSelectionScreenState extends ConsumerState<GoogleRoleSelectionS
     setState(() => _isSaving = true);
     try {
       final repo = ref.read(authRepositoryProvider);
-      await repo.completeGoogleProfileCreation(
-        user: widget.user,
+      await repo.repairUserProfile(
+        uid: widget.user.uid,
+        displayName: widget.user.displayName ?? 'TeachLearn User',
+        email: widget.user.email ?? '',
         role: _selectedRole,
       );
 
@@ -71,13 +73,13 @@ class _GoogleRoleSelectionScreenState extends ConsumerState<GoogleRoleSelectionS
               const Center(child: BrandMark(size: 56)),
               const SizedBox(height: AppSpacing.lg),
               Text(
-                'Welcome, ${widget.user.displayName ?? "there"}!',
+                'Complete profile',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                'Select your role to complete setting up your account.',
+                'Welcome, ${widget.user.displayName ?? "there"}! Select your role to finish setting up your account.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),

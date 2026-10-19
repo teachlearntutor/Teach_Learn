@@ -10,6 +10,7 @@ import '../../../../core/widgets/status_chip.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/presentation/screens/auth_screen.dart';
+import '../../../auth/presentation/widgets/email_verification_banner.dart';
 import '../../../schedule/presentation/providers/class_session_providers.dart';
 
 class LearnerHomeScreen extends ConsumerStatefulWidget {
@@ -291,7 +292,12 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
         ],
       ),
       body: SafeArea(
-        child: tabs[_selectedIndex],
+        child: Column(
+          children: [
+            const EmailVerificationBanner(),
+            Expanded(child: tabs[_selectedIndex]),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,

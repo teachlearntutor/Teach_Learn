@@ -11,6 +11,11 @@ final authStateChangesProvider = StreamProvider<User?>((ref) {
   return repo.authStateChanges;
 });
 
+final userChangesProvider = StreamProvider<User?>((ref) {
+  final repo = ref.watch(authRepositoryProvider);
+  return repo.userChanges;
+});
+
 final currentUserRoleProvider = FutureProvider.family<String?, String>((ref, uid) async {
   final repo = ref.watch(authRepositoryProvider);
   return repo.getUserRole(uid);

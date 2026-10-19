@@ -28,9 +28,11 @@ class GoogleAuthResult {
 /// Unambiguous uppercase alphanumeric characters for public IDs (excludes 0, O, 1, I, L)
 const String _kUnambiguousChars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
-bool _isGoogleSignInInitialized = false;
-
 class AuthRepository {
+  static const googleServerClientId =
+      '920270768909-tcueboq3pt1obkvvabtam31fb1svmntq.apps.googleusercontent.com';
+  static Future<void>? _googleSignInInitialization;
+
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
 
@@ -43,6 +45,11 @@ class AuthRepository {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   Stream<User?> get userChanges => _auth.userChanges();
   User? get currentUser => _auth.currentUser;
+
+  static Future<void> initializeGoogleSignIn() {
+    return _googleSignInInitialization ??=
+        GoogleSignIn.instance.initialize(serverClientId: googleServerClientId);
+  }
 
   /// Map Firebase Auth exceptions to friendly, clear English user messages.
   String _mapFirebaseAuthError(FirebaseAuthException e) {
@@ -66,20 +73,6 @@ class AuthRepository {
         return 'An account already exists with the same email address using a different sign-in method.';
       default:
         return e.message ?? 'An unexpected authentication error occurred.';
-    }
-  }
-
-  /// Ensure GoogleSignIn instance is initialized exactly once per app lifecycle
-  Future<void> _ensureGoogleSignInInitialized() async {
-    if (!_isGoogleSignInInitialized) {
-      try {
-        await GoogleSignIn.instance.initialize(
-          serverClientId: '920270768909-tcueboq3pt1obkvvabtam31fb1svmntq.apps.googleusercontent.com',
-        );
-        _isGoogleSignInInitialized = true;
-      } catch (_) {
-        // Fallback initialization
-      }
     }
   }
 
@@ -111,6 +104,7 @@ class AuthRepository {
 
       // Update Firebase Auth display name
       await createdUser.updateDisplayName(cleanName);
+      await createdUser.sendEmailVerification();
 
       // Atomic reservation of publicId and creation of users/{uid} document
       await _createUsersDocumentWithRandomPublicId(
@@ -167,8 +161,6 @@ class AuthRepository {
   /// Sign in with Google using native GoogleSignIn credential.
   Future<GoogleAuthResult> signInWithGoogle() async {
     try {
-      await _ensureGoogleSignInInitialized();
-
       final GoogleSignInAccount account = await GoogleSignIn.instance.authenticate();
       final GoogleSignInAuthentication googleAuth = account.authentication;
       final idToken = googleAuth.idToken;
@@ -245,10 +237,22 @@ class AuthRepository {
   Future<User?> reloadCurrentUser() async {
     final user = _auth.currentUser;
     if (user != null) {
-      await user.reload();
-      return _auth.currentUser;
+      try {
+        await user.reload();
+        return _auth.currentUser;
+      } on FirebaseAuthException catch (e) {
+        throw AuthException(_mapFirebaseAuthError(e));
+      }
     }
     return null;
+  }
+
+  Future<void> sendEmailVerification(User user) async {
+    try {
+      await user.sendEmailVerification();
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_mapFirebaseAuthError(e));
+    }
   }
 
   /// Fetch user document role from Firestore users/{uid}.

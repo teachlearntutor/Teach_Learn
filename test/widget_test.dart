@@ -1,17 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:teach_learn/core/widgets/app_button.dart';
 import 'package:teach_learn/core/theme/app_theme.dart';
+import 'package:teach_learn/features/auth/data/auth_repository.dart';
+import 'package:teach_learn/features/auth/presentation/providers/auth_providers.dart';
 import 'package:teach_learn/features/tutor/presentation/screens/tutor_home_screen.dart';
 import 'package:teach_learn/features/auth/presentation/screens/auth_screen.dart';
 import 'package:teach_learn/main.dart';
+
+class _UnauthenticatedAuthRepository extends Fake implements AuthRepository {
+  @override
+  Stream<User?> get authStateChanges => Stream<User?>.value(null);
+}
 
 void main() {
   testWidgets('TeachLearnApp opens login screen after splash screen', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: TeachLearnApp()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWith(
+            (ref) => _UnauthenticatedAuthRepository(),
+          ),
+        ],
+        child: const TeachLearnApp(),
+      ),
+    );
 
     expect(find.text('TeachLearn'), findsAtLeastNWidgets(1));
     await tester.pump(const Duration(milliseconds: 1200));
@@ -25,11 +42,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: AuthScreen(),
-        ),
-      ),
+      const ProviderScope(child: MaterialApp(home: AuthScreen())),
     );
 
     await tester.tap(_submitButton('Log in'));
@@ -51,10 +64,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        child: MaterialApp(
-          theme: AppTheme.darkTheme,
-          home: const AuthScreen(),
-        ),
+        child: MaterialApp(theme: AppTheme.darkTheme, home: const AuthScreen()),
       ),
     );
     await tester.pumpAndSettle();
@@ -103,11 +113,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: TutorHomeScreen(),
-        ),
-      ),
+      const ProviderScope(child: MaterialApp(home: TutorHomeScreen())),
     );
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
