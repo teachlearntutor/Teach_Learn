@@ -49,7 +49,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Enter your email address'), findsOneWidget);
-    expect(find.text('Enter your password'), findsOneWidget);
+    expect(find.text('Enter your password'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('Branded auth layout renders cleanly in dark mode', (

@@ -88,15 +88,24 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Enter your email address';
     if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
-      return 'Enter a valid email address';
+      return 'Enter a valid email address (e.g., name@example.com)';
     }
     return null;
   }
 
   String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) return 'Enter your password';
-    if (_isSignUp && value.length < 8) {
-      return 'Use at least 8 characters';
+    final password = value ?? '';
+    if (password.isEmpty) return 'Enter your password';
+    if (_isSignUp) {
+      if (password.length < 8) {
+        return 'Weak password: At least 8 characters required';
+      }
+      if (!RegExp(r'[A-Za-z]').hasMatch(password) || !RegExp(r'[0-9]').hasMatch(password)) {
+        return 'Weak password: Must contain both letters and numbers';
+      }
+      if (RegExp(r'^(.)\1+$').hasMatch(password)) {
+        return 'Weak password: Avoid repeated identical characters';
+      }
     }
     return null;
   }
@@ -374,7 +383,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                 if (_isSignUp) ...[
                                   AppTextField(
                                     label: 'Full name',
-                                    hint: 'Your full name',
+                                    hint: 'e.g., Ali Ahmed',
                                     controller: _nameController,
                                     textCapitalization: TextCapitalization.words,
                                     textInputAction: TextInputAction.next,
@@ -395,7 +404,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                 const SizedBox(height: AppSpacing.md),
                                 AppTextField(
                                   label: 'Password',
-                                  hint: _isSignUp ? 'At least 8 characters' : null,
+                                  hint: _isSignUp
+                                      ? 'At least 8 chars (letters & numbers)'
+                                      : 'Enter your password',
                                   controller: _passwordController,
                                   obscureText: !_showPassword,
                                   textInputAction:
