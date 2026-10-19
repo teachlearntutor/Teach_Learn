@@ -46,6 +46,26 @@ class AppTheme {
           side: const BorderSide(color: AppColors.borderLight, width: 1.0),
         ),
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 64,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return textTheme.labelSmall?.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+              color: AppColors.primaryTeal,
+            );
+          }
+          return textTheme.labelSmall?.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            letterSpacing: -0.3,
+            color: AppColors.inkMuted,
+          );
+        }),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceLight,
@@ -154,6 +174,26 @@ class AppTheme {
           borderRadius: AppRadii.cardBorderRadius,
           side: const BorderSide(color: AppColors.borderDark, width: 1.0),
         ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 64,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return textTheme.labelSmall?.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+              color: AppColors.primaryTealLight,
+            );
+          }
+          return textTheme.labelSmall?.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            letterSpacing: -0.3,
+            color: AppColors.darkInkMuted,
+          );
+        }),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
