@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -16,8 +18,9 @@ import '../../../auth/presentation/screens/auth_screen.dart';
 import '../providers/profile_providers.dart';
 
 const String _kAvatarColorKey = 'pref_avatar_color_index';
+const String _kProfileImagePathKey = 'pref_profile_image_path';
 
-final List<Color> _kAvatarColors = const [
+const List<Color> _kAvatarColors = [
   AppColors.primaryTeal,
   AppColors.accentTeal,
   AppColors.success,
@@ -39,19 +42,29 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isLoggingOut = false;
   int _selectedAvatarColorIndex = 0;
+  String? _profileImagePath;
 
   @override
   void initState() {
     super.initState();
-    _loadAvatarColor();
+    _loadProfilePreferences();
   }
 
-  Future<void> _loadAvatarColor() async {
+  Future<void> _loadProfilePreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final index = prefs.getInt(_kAvatarColorKey) ?? 0;
-      if (index >= 0 && index < _kAvatarColors.length) {
-        setState(() => _selectedAvatarColorIndex = index);
+      final imagePath = prefs.getString(_kProfileImagePathKey);
+
+      if (mounted) {
+        setState(() {
+          if (index >= 0 && index < _kAvatarColors.length) {
+            _selectedAvatarColorIndex = index;
+          }
+          if (imagePath != null && File(imagePath).existsSync()) {
+            _profileImagePath = imagePath;
+          }
+        });
       }
     } catch (_) {}
   }
@@ -61,6 +74,61 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_kAvatarColorKey, index);
+    } catch (_) {}
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_kProfileImagePathKey, image.path);
+
+        if (mounted) {
+          setState(() {
+            _profileImagePath = image.path;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile photo updated successfully!'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to select image: ${e.toString()}'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    }
+  }
+
+  Future<void> _removeProfileImage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kProfileImagePathKey);
+      if (mounted) {
+        setState(() {
+          _profileImagePath = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile photo removed.'),
+          ),
+        );
+      }
     } catch (_) {}
   }
 
@@ -128,6 +196,61 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           duration: const Duration(seconds: 2),
         ),
       );
+  }
+
+  Future<void> _showAvatarOptionsBottomSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: AppRadii.sheetBorderRadius,
+      ),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Change Profile Picture',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.primaryTeal),
+              title: const Text('Choose Photo from Gallery'),
+              subtitle: const Text('Upload a photo from your device'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickImageFromGallery();
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.color_lens_outlined, color: AppColors.primaryTeal),
+              title: const Text('Choose Avatar Color Accent'),
+              subtitle: const Text('Select a paper-styled background accent'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showAvatarColorPicker();
+              },
+            ),
+            if (_profileImagePath != null) ...[
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
+                title: const Text('Remove Photo', style: TextStyle(color: AppColors.danger)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _removeProfileImage();
+                },
+              ),
+            ],
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showAvatarColorPicker() async {
@@ -291,7 +414,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Password reset email sent to $email.'),
+          content: Text('Password reset link sent to $email from teachlearntutor@gmail.com.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -327,21 +450,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: AppSpacing.lg),
             ListTile(
               leading: const Icon(Icons.email_outlined, color: AppColors.primaryTeal),
-              title: const Text('Email Support'),
-              subtitle: const Text('support@teachlearn.app'),
-              onTap: () => _copyToClipboard('support@teachlearn.app', 'Support Email'),
+              title: const Text('Official Support Email'),
+              subtitle: const Text('teachlearntutor@gmail.com'),
+              onTap: () => _copyToClipboard('teachlearntutor@gmail.com', 'Support Email'),
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.help_outline_rounded, color: AppColors.primaryTeal),
-              title: const Text('User Guide & FAQ'),
-              subtitle: const Text('Learn how to manage students & schedules'),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                  const SnackBar(content: Text('User Guide will be available in next update.')),
-                );
-              },
+              leading: const Icon(Icons.lock_reset_outlined, color: AppColors.primaryTeal),
+              title: const Text('Password Reset Notice'),
+              subtitle: const Text('Password reset emails are sent securely from teachlearntutor@gmail.com'),
             ),
             const SizedBox(height: AppSpacing.md),
           ],
@@ -374,7 +491,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   '2. \$0 Cost & Spark Plan:\n'
                   'No third-party trackers, advertisements, or paid analytics are embedded in this application.\n\n'
                   '3. Data Protection:\n'
-                  'Only authorized users linked to your classes can view shared session records.',
+                  'Only authorized users linked to your classes can view shared session records.\n\n'
+                  '4. Support Contact:\n'
+                  'For any data privacy inquiries, contact teachlearntutor@gmail.com.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
                 ),
               ),
@@ -425,22 +544,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Stack(
                   children: [
                     CircleAvatar(
-                      radius: 38,
+                      radius: 40,
                       backgroundColor: avatarColor,
-                      child: Text(
-                        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'T',
-                        style: const TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                      backgroundImage: _profileImagePath != null
+                          ? FileImage(File(_profileImagePath!))
+                          : null,
+                      child: _profileImagePath == null
+                          ? Text(
+                              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'T',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            )
+                          : null,
                     ),
                     Positioned(
                       bottom: 0,
                       right: 0,
                       child: GestureDetector(
-                        onTap: _showAvatarColorPicker,
+                        onTap: _showAvatarOptionsBottomSheet,
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
@@ -452,7 +576,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             ),
                           ),
                           child: Icon(
-                            Icons.color_lens_outlined,
+                            Icons.camera_alt_outlined,
                             size: 16,
                             color: isDark ? AppColors.primaryTealLight : AppColors.primaryTeal,
                           ),
@@ -603,14 +727,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ListTile(
                 leading: const Icon(Icons.lock_reset_outlined),
                 title: const Text('Change Password'),
-                subtitle: const Text('Send password reset email to your address'),
+                subtitle: const Text('Send secure password reset link to your email'),
                 onTap: () => _sendPasswordResetEmail(email),
               ),
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.support_agent_outlined),
                 title: const Text('Help & Support'),
-                subtitle: const Text('Contact support or view guide'),
+                subtitle: const Text('teachlearntutor@gmail.com'),
                 onTap: _showHelpSupportModal,
               ),
               const Divider(height: 1),
