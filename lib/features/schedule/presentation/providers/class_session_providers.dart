@@ -1,46 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/class_session_repository.dart';
 import '../../domain/models/class_session.dart';
+import 'schedule_providers.dart';
 
-final classSessionRepositoryProvider = Provider<InMemoryClassSessionRepository>(
-  (ref) => InMemoryClassSessionRepository(),
-);
+final classSessionsProvider = Provider<AsyncValue<List<ClassSession>>>((ref) {
+  final now = DateTime.now();
+  final startDate = DateTime(now.year, now.month, now.day - 7);
+  final endDate = DateTime(now.year, now.month, now.day + 14);
 
-final classSessionsProvider =
-    StateNotifierProvider<
-      ClassSessionController,
-      AsyncValue<List<ClassSession>>
-    >(
-      (ref) =>
-          ClassSessionController(ref.watch(classSessionRepositoryProvider)),
-    );
+  final range = DateRange(startDate: startDate, endDate: endDate);
+  final sessions = ref.watch(expandedSessionsProvider(range));
 
-class ClassSessionController
-    extends StateNotifier<AsyncValue<List<ClassSession>>> {
-  ClassSessionController(this._repository) : super(const AsyncLoading()) {
-    _load();
-  }
-
-  final InMemoryClassSessionRepository _repository;
-
-  Future<void> _load() async {
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    if (mounted) state = AsyncData(_repository.getAll());
-  }
-
-  void add(ClassSession session) {
-    _repository.add(session);
-    state = AsyncData(_repository.getAll());
-  }
-
-  void update(ClassSession session) {
-    _repository.update(session);
-    state = AsyncData(_repository.getAll());
-  }
-
-  void delete(String sessionId) {
-    _repository.delete(sessionId);
-    state = AsyncData(_repository.getAll());
-  }
-}
+  return AsyncData(sessions);
+});

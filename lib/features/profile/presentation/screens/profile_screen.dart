@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -15,7 +16,6 @@ import '../../../../core/widgets/status_chip.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/presentation/screens/auth_screen.dart';
-import '../providers/profile_providers.dart';
 
 const List<Color> _kAvatarColors = [
   AppColors.primaryTeal,
@@ -67,6 +67,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           if (index >= 0 && index < _kAvatarColors.length) {
             _selectedAvatarColorIndex = index;
           }
+          // Gracefully verify image file exists before setting path
           if (imagePath != null && File(imagePath).existsSync()) {
             _profileImagePath = imagePath;
           } else {
@@ -101,17 +102,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
 
       if (image != null) {
+        // Copy image into persistent app documents directory to survive cache clearing
+        final appDocDir = await getApplicationDocumentsDirectory();
+        final extension = image.path.contains('.') ? image.path.split('.').last : 'jpg';
+        final savedImageFile = File('${appDocDir.path}/profile_$uid.$extension');
+
+        await File(image.path).copy(savedImageFile.path);
+
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_getProfileImageKey(uid), image.path);
+        await prefs.setString(_getProfileImageKey(uid), savedImageFile.path);
 
         if (mounted) {
           setState(() {
-            _profileImagePath = image.path;
+            _profileImagePath = savedImageFile.path;
           });
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Profile photo updated for your account!'),
+              content: Text('Profile photo updated successfully!'),
               backgroundColor: AppColors.success,
             ),
           );
@@ -133,6 +141,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final user = FirebaseAuth.instance.currentUser;
       final uid = user?.uid ?? '';
       final prefs = await SharedPreferences.getInstance();
+
+      final existingPath = prefs.getString(_getProfileImageKey(uid));
+      if (existingPath != null && File(existingPath).existsSync()) {
+        try {
+          await File(existingPath).delete();
+        } catch (_) {}
+      }
+
       await prefs.remove(_getProfileImageKey(uid));
 
       if (mounted) {
@@ -598,13 +614,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final displayName = user?.displayName ?? 'TeachLearn User';
     final email = user?.email ?? 'No email associated';
 
+    // Detect if current account signed in using Google only (no password provider)
+    final providerData = user?.providerData ?? [];
+    final isGoogleUser = providerData.any((p) => p.providerId == 'google.com');
+    final isPasswordUser = providerData.any((p) => p.providerId == 'password');
+    final isGoogleOnlyAccount = isGoogleUser && !isPasswordUser;
+
     final profileState = uid.isNotEmpty ? ref.watch(userProfileProvider(uid)) : null;
     final profileData = profileState?.asData?.value;
     final role = (profileData?['role'] as String? ?? 'tutor').toUpperCase();
     final publicId = profileData?['publicId'] as String? ?? '';
 
-    final notificationSettings = ref.watch(notificationSettingsProvider);
-    final currentLanguage = ref.watch(appLanguageProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final avatarColor = _kAvatarColors[_selectedAvatarColorIndex];
@@ -625,10 +645,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       CircleAvatar(
                         radius: 40,
                         backgroundColor: avatarColor,
-                        backgroundImage: _profileImagePath != null
+                        backgroundImage: (_profileImagePath != null && File(_profileImagePath!).existsSync())
                             ? FileImage(File(_profileImagePath!))
                             : null,
-                        child: _profileImagePath == null
+                        child: (_profileImagePath == null || !File(_profileImagePath!).existsSync())
                             ? Text(
                                 displayName.isNotEmpty ? displayName[0].toUpperCase() : 'T',
                                 style: const TextStyle(
@@ -753,45 +773,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 trailing: ThemeModeToggle(),
               ),
               const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.language_outlined),
-                title: const Text('App Language'),
-                subtitle: Text(currentLanguage),
-                trailing: DropdownButton<String>(
-                  value: currentLanguage,
-                  underline: const SizedBox(),
-                  items: const [
-                    DropdownMenuItem(value: 'English', child: Text('English')),
-                    DropdownMenuItem(value: 'Urdu', child: Text('Urdu (اردو)')),
-                  ],
-                  onChanged: (newLang) {
-                    if (newLang != null) {
-                      ref.read(appLanguageProvider.notifier).setLanguage(newLang);
-                    }
-                  },
-                ),
+              const ListTile(
+                enabled: false,
+                leading: Icon(Icons.language_outlined),
+                title: Text('App Language'),
+                subtitle: Text('English (Urdu coming soon)'),
+                trailing: StatusChip.present(label: 'Coming Soon'),
               ),
               const Divider(height: 1),
-              SwitchListTile(
-                secondary: const Icon(Icons.notifications_active_outlined),
-                title: const Text('Class Reminders'),
-                subtitle: const Text('Receive notifications for upcoming classes'),
-                value: notificationSettings['classReminders'] ?? true,
-                activeThumbColor: AppColors.primaryTeal,
-                onChanged: (_) {
-                  ref.read(notificationSettingsProvider.notifier).toggleSetting('classReminders');
-                },
+              const SwitchListTile(
+                value: false,
+                onChanged: null,
+                secondary: Icon(Icons.notifications_active_outlined),
+                title: Text('Class Reminders'),
+                subtitle: Text('Class reminders coming in F4'),
               ),
               const Divider(height: 1),
-              SwitchListTile(
-                secondary: const Icon(Icons.fact_check_outlined),
-                title: const Text('Attendance Alerts'),
-                subtitle: const Text('Get notified on attendance updates'),
-                value: notificationSettings['attendanceAlerts'] ?? true,
-                activeThumbColor: AppColors.primaryTeal,
-                onChanged: (_) {
-                  ref.read(notificationSettingsProvider.notifier).toggleSetting('attendanceAlerts');
-                },
+              const SwitchListTile(
+                value: false,
+                onChanged: null,
+                secondary: Icon(Icons.fact_check_outlined),
+                title: Text('Attendance Alerts'),
+                subtitle: Text('Attendance alerts coming in F5'),
               ),
             ],
           ),
@@ -804,13 +807,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         Card(
           child: Column(
             children: [
-              ListTile(
-                leading: const Icon(Icons.lock_reset_outlined),
-                title: const Text('Change Password'),
-                subtitle: const Text('Send secure password reset link to your email'),
-                onTap: () => _sendPasswordResetEmail(email),
-              ),
-              const Divider(height: 1),
+              if (!isGoogleOnlyAccount) ...[
+                ListTile(
+                  leading: const Icon(Icons.lock_reset_outlined),
+                  title: const Text('Change Password'),
+                  subtitle: const Text('Send secure password reset link to your email'),
+                  onTap: () => _sendPasswordResetEmail(email),
+                ),
+                const Divider(height: 1),
+              ],
               ListTile(
                 leading: const Icon(Icons.support_agent_outlined),
                 title: const Text('Help & Support'),

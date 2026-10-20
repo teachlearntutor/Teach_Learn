@@ -149,9 +149,23 @@ class _AttendanceSummary extends ConsumerWidget {
                 .where((record) => record.studentId == studentId)
                 .toList();
             if (studentRecords.isEmpty) {
-              return const EmptyStateWidget(
-                title: 'No attendance yet',
-                description: 'Attendance records will appear after lessons.',
+              return AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '100% attendance',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    const LinearProgressIndicator(value: 1.0),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'No classes marked yet (100% rate)',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               );
             }
             final attended = studentRecords
