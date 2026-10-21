@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
@@ -24,6 +27,7 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
   late final TextEditingController _subjectsController;
   late final TextEditingController _contactController;
   late StudentStatus _status;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -51,31 +55,79 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    final existing = widget.student;
-    final student = Student(
-      id: existing?.id ?? 'student_${DateTime.now().microsecondsSinceEpoch}',
-      name: _nameController.text.trim(),
-      classLevel: _classController.text.trim(),
-      schoolName: _schoolController.text.trim(),
-      subjects: _subjectsController.text
-          .split(',')
-          .map((subject) => subject.trim())
-          .where((subject) => subject.isNotEmpty)
-          .toList(),
-      parentContact: _contactController.text.trim(),
-      status: _status,
-      joinedAt: existing?.joinedAt ?? DateTime.now(),
-    );
 
-    final controller = ref.read(studentsProvider.notifier);
-    if (existing == null) {
-      controller.add(student);
-    } else {
-      controller.update(student);
+    setState(() => _isSaving = true);
+
+    try {
+      final existing = widget.student;
+      final now = DateTime.now();
+      final nameStr = _nameController.text.trim();
+      final classStr = _classController.text.trim();
+
+      // Extract numeric sort digit from class string (e.g. "Class 9" -> 9)
+      final classDigitMatch = RegExp(r'\d+').firstMatch(classStr);
+      final classSort = classDigitMatch != null ? int.parse(classDigitMatch.group(0)!) : 9;
+
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      final student = Student(
+        id: existing?.id ?? '',
+        code: existing?.code ?? _generateStudentCode(),
+        name: nameStr,
+        searchName: nameStr.toLowerCase(),
+        classLevel: classStr,
+        classSort: classSort,
+        school: _schoolController.text.trim(),
+        subjects: _subjectsController.text
+            .split(',')
+            .map((subject) => subject.trim())
+            .where((subject) => subject.isNotEmpty)
+            .toList(),
+        parentContact: _contactController.text.trim(),
+        startDate: existing?.startDate.isNotEmpty == true ? existing!.startDate : todayStr,
+        status: _status,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      );
+
+      final user = FirebaseAuth.instance.currentUser;
+      final uid = user?.uid ?? '';
+      final repo = ref.read(studentRepositoryProvider);
+
+      if (existing == null) {
+        await repo.addStudent(uid, student);
+      } else {
+        await repo.updateStudent(uid, student);
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(existing == null ? 'Student added successfully!' : 'Student profile updated!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
-    Navigator.of(context).pop();
+  }
+
+  String _generateStudentCode() {
+    final rand = math.Random.secure();
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    final code = List.generate(4, (_) => chars[rand.nextInt(chars.length)]).join();
+    return 'S-$code';
   }
 
   String? _required(String? value) =>
@@ -164,9 +216,14 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
               ),
               const SizedBox(height: AppSpacing.lg),
               AppButton.primary(
-                label: isEditing ? 'Save changes' : 'Add student',
+                label: _isSaving
+                    ? 'Saving...'
+                    : isEditing
+                        ? 'Save changes'
+                        : 'Add student',
+                isLoading: _isSaving,
                 isFullWidth: true,
-                onPressed: _save,
+                onPressed: _isSaving ? null : _save,
               ),
               const SizedBox(height: AppSpacing.xl),
             ],

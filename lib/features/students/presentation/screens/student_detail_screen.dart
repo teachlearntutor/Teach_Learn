@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -44,16 +45,25 @@ class StudentDetailScreen extends ConsumerWidget {
 
     if (confirm != true || !context.mounted) return;
 
-    ref.read(studentsProvider.notifier).delete(student.id);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final uid = user?.uid ?? '';
+      await ref.read(studentRepositoryProvider).deleteStudent(uid, student.id);
 
-    if (!context.mounted) return;
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${student.name} deleted.'),
-        backgroundColor: AppColors.danger,
-      ),
-    );
+      if (!context.mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${student.name} deleted.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.danger),
+      );
+    }
   }
 
   @override
@@ -62,19 +72,27 @@ class StudentDetailScreen extends ConsumerWidget {
 
     return studentsState.when(
       data: (allStudents) {
+        final now = DateTime.now();
         final student = allStudents.firstWhere(
           (s) => s.id == studentId,
           orElse: () => Student(
             id: studentId,
+            code: 'S-4K2P',
             name: 'Unknown Student',
-            classLevel: 'Class',
-            schoolName: '',
+            searchName: 'unknown student',
+            classLevel: 'Class 9',
+            classSort: 9,
+            school: '',
             subjects: [],
             parentContact: '',
+            startDate: '',
             status: StudentStatus.active,
-            joinedAt: DateTime.now(),
+            createdAt: now,
+            updatedAt: now,
           ),
         );
+
+        final schoolText = student.schoolName.isNotEmpty ? ' • ${student.schoolName}' : '';
 
         return Scaffold(
           appBar: AppBar(
@@ -126,7 +144,7 @@ class StudentDetailScreen extends ConsumerWidget {
                           Text(student.name, style: Theme.of(context).textTheme.headlineSmall),
                           const SizedBox(height: 2),
                           Text(
-                            '${student.classLevel} ${student.schoolName.isNotEmpty ? "• ${student.schoolName}" : ""}',
+                            '${student.classLevel}$schoolText',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const SizedBox(height: AppSpacing.xs),
@@ -148,7 +166,7 @@ class StudentDetailScreen extends ConsumerWidget {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.phone_outlined),
                       title: const Text('Parent contact'),
-                      subtitle: Text(student.parentContact.isNotEmpty ? student.parentContact : 'Not provided'),
+                      subtitle: Text(student.parentContact?.isNotEmpty == true ? student.parentContact! : 'Not provided'),
                     ),
                     const Divider(),
                     ListTile(

@@ -31,7 +31,23 @@ service cloud.firestore {
 
       allow delete: if isOwner(userId);
 
-      // User subcollections (e.g. students, schedule, attendance)
+      // Student subcollection rules
+      match /students/{studentId} {
+        allow read: if isOwner(userId);
+
+        allow create, update: if isOwner(userId)
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 1
+          && request.resource.data.name.size() <= 80
+          && request.resource.data.status in ['active', 'paused', 'left']
+          && request.resource.data.classLevel is string
+          && request.resource.data.subjects is list
+          && request.resource.data.subjects.size() <= 10;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // Other user subcollections (classes, sessions, attendance, holidays)
       match /{subcollection=**} {
         allow read, write: if isOwner(userId);
       }

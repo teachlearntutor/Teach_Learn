@@ -1,43 +1,29 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/student_repository.dart';
 import '../../domain/models/student.dart';
 
-final studentRepositoryProvider = Provider<InMemoryStudentRepository>(
-  (ref) => InMemoryStudentRepository(),
-);
+final studentRepositoryProvider = Provider<StudentRepository>((ref) {
+  return FirestoreStudentRepository();
+});
 
-final studentsProvider =
-    StateNotifierProvider<StudentController, AsyncValue<List<Student>>>(
-      (ref) => StudentController(ref.watch(studentRepositoryProvider)),
-    );
-
-class StudentController extends StateNotifier<AsyncValue<List<Student>>> {
-  StudentController(this._repository) : super(const AsyncLoading()) {
-    _load();
+final studentsStreamProvider = StreamProvider<List<Student>>((ref) {
+  try {
+    final user = ref.watch(authRepositoryProvider).currentUser;
+    final uid = user?.uid ?? '';
+    if (uid.isEmpty) return Stream.value([]);
+    return ref.watch(studentRepositoryProvider).watchStudents(uid);
+  } catch (_) {
+    return Stream.value([]);
   }
+});
 
-  final InMemoryStudentRepository _repository;
+final studentsProvider = Provider<AsyncValue<List<Student>>>((ref) {
+  return ref.watch(studentsStreamProvider);
+});
 
-  Future<void> _load() async {
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (mounted) state = AsyncData(_repository.getAll());
-  }
-
-  void add(Student student) {
-    _repository.add(student);
-    state = AsyncData(_repository.getAll());
-  }
-
-  void update(Student student) {
-    _repository.update(student);
-    state = AsyncData(_repository.getAll());
-  }
-
-  void delete(String studentId) {
-    if (state.hasValue) {
-      final current = state.value!;
-      state = AsyncData(current.where((s) => s.id != studentId).toList());
-    }
-  }
-}
+final activeStudentsCountProvider = Provider<int>((ref) {
+  final students = ref.watch(studentsProvider).value ?? [];
+  return students.where((s) => s.status == StudentStatus.active).length;
+});

@@ -6,6 +6,9 @@ import 'package:teach_learn/core/widgets/app_button.dart';
 import 'package:teach_learn/core/theme/app_theme.dart';
 import 'package:teach_learn/features/auth/data/auth_repository.dart';
 import 'package:teach_learn/features/auth/presentation/providers/auth_providers.dart';
+import 'package:teach_learn/features/students/data/fake_student_repository.dart';
+import 'package:teach_learn/features/students/domain/models/student.dart';
+import 'package:teach_learn/features/students/presentation/providers/student_providers.dart';
 import 'package:teach_learn/features/tutor/presentation/screens/tutor_home_screen.dart';
 import 'package:teach_learn/features/auth/presentation/screens/auth_screen.dart';
 import 'package:teach_learn/main.dart';
@@ -14,6 +17,41 @@ class _UnauthenticatedAuthRepository extends Fake implements AuthRepository {
   @override
   Stream<User?> get authStateChanges => Stream<User?>.value(null);
 }
+
+final _testNow = DateTime.now();
+
+final _sampleStudents = [
+  Student(
+    id: 'student_1',
+    code: 'S-4K2P',
+    name: 'Ayesha Khan',
+    searchName: 'ayesha khan',
+    classLevel: 'Class 9',
+    classSort: 9,
+    school: 'Beaconhouse School',
+    subjects: const ['Mathematics', 'Physics'],
+    parentContact: '0301-555-0101',
+    startDate: '2026-01-01',
+    status: StudentStatus.active,
+    createdAt: _testNow,
+    updatedAt: _testNow,
+  ),
+  Student(
+    id: 'student_2',
+    code: 'S-8M3Q',
+    name: 'Hamza Raza',
+    searchName: 'hamza raza',
+    classLevel: 'Class 8',
+    classSort: 8,
+    school: 'City School',
+    subjects: const ['Mathematics', 'Science'],
+    parentContact: '0302-555-0102',
+    startDate: '2026-01-01',
+    status: StudentStatus.active,
+    createdAt: _testNow,
+    updatedAt: _testNow,
+  ),
+];
 
 void main() {
   testWidgets('TeachLearnApp opens login screen after splash screen', (
@@ -88,6 +126,14 @@ void main() {
   ) async {
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          studentRepositoryProvider.overrideWith(
+            (ref) => FakeStudentRepository(_sampleStudents),
+          ),
+          studentsStreamProvider.overrideWith(
+            (ref) => Stream.value(_sampleStudents),
+          ),
+        ],
         child: MaterialApp(
           theme: AppTheme.lightTheme,
           home: const TutorHomeScreen(),
@@ -113,7 +159,17 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: TutorHomeScreen())),
+      ProviderScope(
+        overrides: [
+          studentRepositoryProvider.overrideWith(
+            (ref) => FakeStudentRepository(_sampleStudents),
+          ),
+          studentsStreamProvider.overrideWith(
+            (ref) => Stream.value(_sampleStudents),
+          ),
+        ],
+        child: const MaterialApp(home: TutorHomeScreen()),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
