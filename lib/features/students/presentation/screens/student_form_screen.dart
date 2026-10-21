@@ -82,9 +82,10 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
       value == null || value.trim().isEmpty ? 'This field is required' : null;
 
   String? _validateContact(String? value) {
-    final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
+    if (value == null || value.trim().isEmpty) return null;
+    final digits = value.replaceAll(RegExp(r'\D'), '');
     if (digits.length < 7 || digits.length > 15) {
-      return 'Enter a valid parent contact number';
+      return 'Enter a valid contact number';
     }
     return null;
   }
