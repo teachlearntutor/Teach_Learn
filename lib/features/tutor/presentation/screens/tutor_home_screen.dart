@@ -126,6 +126,7 @@ class _TutorDashboardView extends ConsumerWidget {
     final publicId = profileState?.asData?.value?['publicId'] as String? ?? '';
 
     final studentsState = ref.watch(studentsProvider);
+    final activeCount = ref.watch(activeStudentsCountProvider);
     final sessionsState = ref.watch(classSessionsProvider);
 
     return ListView(
@@ -186,44 +187,99 @@ class _TutorDashboardView extends ConsumerWidget {
         // Stat Cards
         studentsState.when(
           data: (students) {
-            final activeCount = students.where((s) => s.status.name == 'active').length;
-            return Row(
+            return Column(
               children: [
-                Expanded(
-                  child: _StatCard(
-                    title: 'Students',
-                    value: '${students.length}',
-                    subtitle: '$activeCount Active',
-                    icon: Icons.people_outline_rounded,
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                        title: 'Students',
+                        value: '${students.length}',
+                        subtitle: '$activeCount Active',
+                        icon: Icons.people_outline_rounded,
+                        color: AppColors.primaryTeal,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: sessionsState.when(
+                        data: (sessions) => _StatCard(
+                          title: 'Classes Today',
+                          value: '${sessions.length}',
+                          subtitle: 'Scheduled',
+                          icon: Icons.calendar_today_rounded,
+                          color: AppColors.accentTeal,
+                        ),
+                        loading: () => const _StatCard(
+                          title: 'Classes Today',
+                          value: '...',
+                          subtitle: 'Loading',
+                          icon: Icons.calendar_today_rounded,
+                          color: AppColors.accentTeal,
+                        ),
+                        error: (_, _) => const _StatCard(
+                          title: 'Classes Today',
+                          value: '0',
+                          subtitle: 'Scheduled',
+                          icon: Icons.calendar_today_rounded,
+                          color: AppColors.accentTeal,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Zero Students Encouragement Card
+                if (students.isEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Card(
                     color: AppColors.primaryTeal,
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.person_add_rounded, color: Colors.white),
+                              SizedBox(width: AppSpacing.sm),
+                              Text(
+                                'Add Your First Student',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          const Text(
+                            'Organize your home tuition sessions, track attendance, and manage student schedules effortlessly.',
+                            style: TextStyle(color: Colors.white70, fontSize: 13),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: AppColors.primaryTeal,
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const StudentFormScreen(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('Add Student Now'),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: sessionsState.when(
-                    data: (sessions) => _StatCard(
-                      title: 'Classes Today',
-                      value: '${sessions.length}',
-                      subtitle: 'Scheduled',
-                      icon: Icons.calendar_today_rounded,
-                      color: AppColors.accentTeal,
-                    ),
-                    loading: () => const _StatCard(
-                      title: 'Classes Today',
-                      value: '...',
-                      subtitle: 'Loading',
-                      icon: Icons.calendar_today_rounded,
-                      color: AppColors.accentTeal,
-                    ),
-                    error: (_, _) => const _StatCard(
-                      title: 'Classes Today',
-                      value: '0',
-                      subtitle: 'Scheduled',
-                      icon: Icons.calendar_today_rounded,
-                      color: AppColors.accentTeal,
-                    ),
-                  ),
-                ),
+                ],
               ],
             );
           },

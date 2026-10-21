@@ -2,7 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
@@ -15,53 +14,50 @@ service cloud.firestore {
       return role == 'tutor' || role == 'student' || role == 'parent';
     }
 
-    // User profile document rules
+    function validStudent(d) {
+      return d.name is string
+      && d.name.size() >= 1 && d.name.size() <= 80
+      && d.status in ['active', 'paused', 'left']
+      && d.classLevel is string
+      && d.subjects is list
+      && d.subjects.size() <= 10;
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId);
 
       allow create: if isOwner(userId)
-        && isValidRole(request.resource.data.role)
-        && request.resource.data.displayName is string
-        && request.resource.data.email is string;
+      && isValidRole(request.resource.data.role)
+      && request.resource.data.displayName is string
+      && request.resource.data.email is string
+      && request.resource.data.publicId is string;
 
       allow update: if isOwner(userId)
-        && isValidRole(request.resource.data.role)
-        && request.resource.data.publicId == resource.data.publicId
-        && request.resource.data.role == resource.data.role;
+      && isValidRole(request.resource.data.role)
+      && request.resource.data.publicId == resource.data.publicId
+      && request.resource.data.role == resource.data.role;
 
       allow delete: if isOwner(userId);
 
-      // Student subcollection rules
       match /students/{studentId} {
-        allow read: if isOwner(userId);
-
+        allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
-          && request.resource.data.name is string
-          && request.resource.data.name.size() >= 1
-          && request.resource.data.name.size() <= 80
-          && request.resource.data.status in ['active', 'paused', 'left']
-          && request.resource.data.classLevel is string
-          && request.resource.data.subjects is list
-          && request.resource.data.subjects.size() <= 10;
-
-        allow delete: if isOwner(userId);
+        && validStudent(request.resource.data);
       }
 
-      // Other user subcollections (classes, sessions, attendance, holidays)
-      match /{subcollection=**} {
-        allow read, write: if isOwner(userId);
-      }
+      // One explicit block per subcollection the app really uses.
+      match /classes/{id}    { allow read, write: if isOwner(userId); }
+      match /sessions/{id}   { allow read, write: if isOwner(userId); }
+      match /attendance/{id} { allow read, write: if isOwner(userId); }
+      match /holidays/{id}   { allow read, write: if isOwner(userId); }
     }
 
-    // Public ID reservations (create-only, no read/update/delete)
     match /publicIds/{publicId} {
-      // get is needed because sign up checks whether a code is still free
       allow get: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      allow list, update, delete: if true;
+      allow list, update, delete: if false;
     }
 
-    // Default deny all other paths
     match /{document=**} {
       allow read, write: if false;
     }
