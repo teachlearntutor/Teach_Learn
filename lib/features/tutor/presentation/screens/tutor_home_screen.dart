@@ -7,7 +7,7 @@ import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/status_chip.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
-import '../../../attendance/presentation/providers/attendance_providers.dart';
+import '../../../attendance/presentation/screens/attendance_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../schedule/presentation/providers/class_session_providers.dart';
@@ -49,7 +49,7 @@ class _TutorHomeScreenState extends ConsumerState<TutorHomeScreen> {
       }),
       const StudentsScreen(),
       const _TutorScheduleTab(),
-      const _TutorAttendanceTab(),
+      const AttendanceScreen(),
       const ProfileScreen(),
     ];
 
@@ -364,56 +364,6 @@ class _TutorScheduleTab extends ConsumerWidget {
                   trailing: const StatusChip.present(label: 'Scheduled'),
                 ),
               )).toList(),
-            );
-          },
-          loading: () => const AppLoader.inline(),
-          error: (_, _) => const SizedBox.shrink(),
-        ),
-      ],
-    );
-  }
-}
-
-class _TutorAttendanceTab extends ConsumerWidget {
-  const _TutorAttendanceTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final attendanceState = ref.watch(attendanceProvider);
-
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      children: [
-        Text('Class Attendance History', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: AppSpacing.md),
-        attendanceState.when(
-          data: (records) {
-            if (records.isEmpty) {
-              return const EmptyStateWidget(
-                icon: Icons.fact_check_outlined,
-                title: 'No attendance records',
-                description: 'Marked attendance history will appear here.',
-              );
-            }
-            return Column(
-              children: records.take(10).map((record) {
-                final isPresent = record.status.name == 'present';
-                final isAbsent = record.status.name == 'absent';
-                return Card(
-                  margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: ListTile(
-                    leading: Icon(
-                      isPresent ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                      color: isPresent ? AppColors.success : (isAbsent ? AppColors.danger : AppColors.warning),
-                    ),
-                    title: Text('Student ID: ${record.studentId}'),
-                    subtitle: Text('Date: ${record.sessionDate.day}/${record.sessionDate.month}/${record.sessionDate.year}'),
-                    trailing: isPresent
-                        ? const StatusChip.present()
-                        : (isAbsent ? const StatusChip.absent() : const StatusChip.late()),
-                  ),
-                );
-              }).toList(),
             );
           },
           loading: () => const AppLoader.inline(),

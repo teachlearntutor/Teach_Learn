@@ -33,4 +33,11 @@ class StudentController extends StateNotifier<AsyncValue<List<Student>>> {
     _repository.update(student);
     state = AsyncData(_repository.getAll());
   }
+
+  void delete(String studentId) {
+    if (state.hasValue) {
+      final current = state.value!;
+      state = AsyncData(current.where((s) => s.id != studentId).toList());
+    }
+  }
 }

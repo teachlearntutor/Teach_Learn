@@ -21,6 +21,8 @@ class Student {
   final StudentStatus status;
   final DateTime joinedAt;
 
+  String get code => 'S-${id.length >= 4 ? id.substring(0, 4).toUpperCase() : id.toUpperCase()}';
+
   Student copyWith({
     String? name,
     String? classLevel,

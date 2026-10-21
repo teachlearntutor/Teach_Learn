@@ -1,216 +1,181 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/status_chip.dart';
-import '../../../attendance/domain/models/attendance_record.dart';
-import '../../../attendance/presentation/providers/attendance_providers.dart';
+import '../../../attendance/presentation/widgets/student_attendance_calendar.dart';
 import '../../domain/models/student.dart';
 import '../providers/student_providers.dart';
 import 'student_form_screen.dart';
 
 class StudentDetailScreen extends ConsumerWidget {
-  const StudentDetailScreen({super.key, required this.studentId});
+  const StudentDetailScreen({
+    super.key,
+    required this.studentId,
+  });
 
   final String studentId;
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final students = ref.watch(studentsProvider);
-    final student = students.valueOrNull
-        ?.where((item) => item.id == studentId)
-        .firstOrNull;
-
-    if (student == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Student')),
-        body: Center(
-          child: students.isLoading
-              ? const AppLoader.inline(size: 32)
-              : const EmptyStateWidget(
-                  title: 'Student not found',
-                  description: 'This student may have been removed.',
-                ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Student details'),
+  Future<void> _deleteStudent(BuildContext context, WidgetRef ref, Student student) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Student?'),
+        content: Text('Are you sure you want to permanently delete ${student.name}?'),
         actions: [
-          IconButton(
-            tooltip: 'Edit student',
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => StudentFormScreen(student: student),
-              ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
             ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    ref.read(studentsProvider.notifier).delete(student.id);
+
+    if (!context.mounted) return;
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${student.name} deleted.'),
+        backgroundColor: AppColors.danger,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final studentsState = ref.watch(studentsProvider);
+
+    return studentsState.when(
+      data: (allStudents) {
+        final student = allStudents.firstWhere(
+          (s) => s.id == studentId,
+          orElse: () => Student(
+            id: studentId,
+            name: 'Unknown Student',
+            classLevel: 'Class',
+            schoolName: '',
+            subjects: [],
+            parentContact: '',
+            status: StudentStatus.active,
+            joinedAt: DateTime.now(),
+          ),
+        );
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(student.name),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                tooltip: 'Edit Student',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => StudentFormScreen(student: student),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
+                tooltip: 'Delete Student',
+                onPressed: () => _deleteStudent(context, ref, student),
+              ),
+            ],
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            children: [
+              // Student Profile Card
+              AppCard(
+                child: Row(
                   children: [
                     CircleAvatar(
-                      radius: 28,
-                      child: Text(_initials(student.name)),
+                      radius: 32,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      child: Text(
+                        student.name.isNotEmpty ? student.name[0].toUpperCase() : 'S',
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text(student.name, style: Theme.of(context).textTheme.headlineSmall),
+                          const SizedBox(height: 2),
                           Text(
-                            student.name,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            '${student.classLevel} · ${student.schoolName}',
+                            '${student.classLevel} ${student.schoolName.isNotEmpty ? "• ${student.schoolName}" : ""}',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
+                          const SizedBox(height: AppSpacing.xs),
+                          StatusChip.present(label: student.status.name.toUpperCase()),
                         ],
                       ),
                     ),
-                    StatusChip(
-                      label: _statusLabel(student.status),
-                      type: _statusType(student.status),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              // Contact & Subjects Card
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.phone_outlined),
+                      title: const Text('Parent contact'),
+                      subtitle: Text(student.parentContact.isNotEmpty ? student.parentContact : 'Not provided'),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.menu_book_rounded),
+                      title: const Text('Enrolled Subjects'),
+                      subtitle: Text(student.subjects.isNotEmpty ? student.subjects.join(', ') : 'All Subjects'),
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  student.subjects.join(' · '),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                const Divider(),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Parent contact',
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                SelectableText(
-                  student.parentContact,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+
+              // Real Monthly Attendance Calendar & Breakdown
+              StudentMonthlyAttendanceCalendar(studentId: student.id),
+              const SizedBox(height: AppSpacing.xl),
+            ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Text('Attendance', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: AppSpacing.sm),
-          _AttendanceSummary(studentId: student.id),
-          const SizedBox(height: AppSpacing.xl),
-        ],
+        );
+      },
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (_, _) => const Scaffold(
+        body: EmptyStateWidget(
+          title: 'Student unavailable',
+          description: 'Could not load student profile.',
+        ),
       ),
     );
   }
 }
-
-class _AttendanceSummary extends ConsumerWidget {
-  const _AttendanceSummary({required this.studentId});
-
-  final String studentId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ref
-        .watch(attendanceProvider)
-        .when(
-          loading: () => AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AppLoader.skeleton(width: 110, height: 15),
-                const SizedBox(height: AppSpacing.md),
-                AppLoader.skeleton(width: double.infinity, height: 8),
-              ],
-            ),
-          ),
-          error: (error, stackTrace) => const EmptyStateWidget(
-            title: 'Attendance unavailable',
-            description: 'Attendance summary could not be loaded.',
-          ),
-          data: (records) {
-            final studentRecords = records
-                .where((record) => record.studentId == studentId)
-                .toList();
-            if (studentRecords.isEmpty) {
-              return AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '100% attendance',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    const LinearProgressIndicator(value: 1.0),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'No classes marked yet (100% rate)',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              );
-            }
-            final attended = studentRecords
-                .where((record) => record.status != AttendanceStatus.absent)
-                .length;
-            final percentage = attended / studentRecords.length;
-            return AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${(percentage * 100).round()}% attendance',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  LinearProgressIndicator(value: percentage),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    '$attended of ${studentRecords.length} lessons attended',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-  }
-}
-
-String _initials(String name) => name
-    .split(' ')
-    .where((part) => part.isNotEmpty)
-    .take(2)
-    .map((part) => part[0])
-    .join()
-    .toUpperCase();
-
-String _statusLabel(StudentStatus status) => switch (status) {
-  StudentStatus.active => 'Active',
-  StudentStatus.paused => 'Paused',
-  StudentStatus.left => 'Left',
-};
-
-StatusType _statusType(StudentStatus status) => switch (status) {
-  StudentStatus.active => StatusType.active,
-  StudentStatus.paused => StatusType.paused,
-  StudentStatus.left => StatusType.left,
-};
