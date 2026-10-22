@@ -11,6 +11,7 @@ import '../../../attendance/presentation/screens/attendance_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../schedule/presentation/providers/class_session_providers.dart';
+import '../../../schedule/presentation/screens/schedule_screen.dart';
 import '../../../students/presentation/providers/student_providers.dart';
 import '../../../students/presentation/screens/student_form_screen.dart';
 import '../../../students/presentation/screens/students_screen.dart';
@@ -48,7 +49,7 @@ class _TutorHomeScreenState extends ConsumerState<TutorHomeScreen> {
         setState(() => _selectedIndex = 1);
       }),
       const StudentsScreen(),
-      const _TutorScheduleTab(),
+      const ScheduleScreen(),
       const AttendanceScreen(),
       const ProfileScreen(),
     ];
@@ -381,51 +382,6 @@ class _StatCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _TutorScheduleTab extends ConsumerWidget {
-  const _TutorScheduleTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sessionsState = ref.watch(classSessionsProvider);
-
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      children: [
-        Text('Weekly Class Schedule', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: AppSpacing.md),
-        sessionsState.when(
-          data: (sessions) {
-            if (sessions.isEmpty) {
-              return const EmptyStateWidget(
-                icon: Icons.calendar_today_rounded,
-                title: 'No classes scheduled',
-                description: 'Your class sessions will appear here.',
-              );
-            }
-            return Column(
-              children: sessions.map((session) => Card(
-                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: ListTile(
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.access_time_rounded),
-                  ),
-                  title: Text(session.subject),
-                  subtitle: Text(
-                    'Time: ${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')} (${session.durationMinutes} mins)',
-                  ),
-                  trailing: const StatusChip.present(label: 'Scheduled'),
-                ),
-              )).toList(),
-            );
-          },
-          loading: () => const AppLoader.inline(),
-          error: (_, _) => const SizedBox.shrink(),
-        ),
-      ],
     );
   }
 }
