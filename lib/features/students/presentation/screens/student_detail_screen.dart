@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/contact_utils.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/status_chip.dart';
@@ -93,6 +94,7 @@ class StudentDetailScreen extends ConsumerWidget {
         );
 
         final schoolText = student.schoolName.isNotEmpty ? ' • ${student.schoolName}' : '';
+        final hasContact = student.parentContact?.isNotEmpty == true;
 
         return Scaffold(
           appBar: AppBar(
@@ -157,7 +159,7 @@ class StudentDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.md),
 
-              // Contact & Subjects Card
+              // Contact & Subjects Card with Call & WhatsApp
               AppCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,7 +168,27 @@ class StudentDetailScreen extends ConsumerWidget {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.phone_outlined),
                       title: const Text('Parent contact'),
-                      subtitle: Text(student.parentContact?.isNotEmpty == true ? student.parentContact! : 'Not provided'),
+                      subtitle: Text(hasContact ? student.parentContact! : 'Not provided'),
+                      trailing: hasContact
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.phone_rounded, color: AppColors.primaryTeal),
+                                  tooltip: 'Call Parent',
+                                  onPressed: () => makePhoneCall(student.parentContact!),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.success),
+                                  tooltip: 'WhatsApp Parent',
+                                  onPressed: () => launchWhatsAppContact(
+                                    rawPhoneNumber: student.parentContact!,
+                                    studentName: student.name,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : null,
                     ),
                     const Divider(),
                     ListTile(

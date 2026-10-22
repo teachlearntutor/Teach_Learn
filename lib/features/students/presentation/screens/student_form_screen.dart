@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/contact_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../domain/models/student.dart';
@@ -65,6 +66,47 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
       final now = DateTime.now();
       final nameStr = _nameController.text.trim();
       final classStr = _classController.text.trim();
+
+      // Check for duplicates when adding a new student
+      if (existing == null) {
+        final existingStudents = ref.read(studentsProvider).value ?? [];
+        final normalizedContact = normalizePakistaniPhoneNumber(_contactController.text.trim());
+
+        final isDuplicateName = existingStudents.any((s) => s.name.trim().toLowerCase() == nameStr.toLowerCase());
+        final isDuplicateContact = normalizedContact.isNotEmpty && existingStudents.any((s) {
+          final c = normalizePakistaniPhoneNumber(s.parentContact ?? '');
+          return c.isNotEmpty && c == normalizedContact;
+        });
+
+        if (isDuplicateName || isDuplicateContact) {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Duplicate Warning'),
+              content: Text(
+                isDuplicateName
+                    ? 'A student named "$nameStr" already exists. Do you still want to add another student with this name?'
+                    : 'A student with parent contact "${_contactController.text.trim()}" already exists. Do you still want to proceed?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Proceed Anyway'),
+                ),
+              ],
+            ),
+          );
+
+          if (confirm != true) {
+            setState(() => _isSaving = false);
+            return;
+          }
+        }
+      }
 
       // Extract numeric sort digit from class string (e.g. "Class 9" -> 9)
       final classDigitMatch = RegExp(r'\d+').firstMatch(classStr);
