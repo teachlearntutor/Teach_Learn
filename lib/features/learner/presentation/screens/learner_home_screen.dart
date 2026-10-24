@@ -11,6 +11,7 @@ import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../schedule/presentation/providers/class_session_providers.dart';
+import '../../../schedule/presentation/providers/schedule_providers.dart';
 
 class LearnerHomeScreen extends ConsumerStatefulWidget {
   const LearnerHomeScreen({super.key, this.onThemeModeChanged});
@@ -48,6 +49,7 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
     final scheduleHeader = isParent ? 'Child\'s Class Schedule' : 'Your Class Schedule';
 
     final sessionsState = ref.watch(classSessionsProvider);
+    final weeklyClassesState = ref.watch(weeklyClassesStreamProvider);
 
     final tabs = [
       // Home Tab
@@ -129,28 +131,36 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   sessionsState.when(
-                    data: (sessions) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          sessions.isNotEmpty ? sessions.first.subject : 'Mathematics',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                    data: (sessions) {
+                      final scheduled = sessions.where((s) => s.status != 'cancelled').toList();
+                      if (scheduled.isEmpty) {
+                        return const Text(
+                          'No upcoming class today',
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        );
+                      }
+                      final next = scheduled.first;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${next.subject} (${next.location.type == 'online' ? "Online" : "Home"})',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          sessions.isNotEmpty
-                              ? 'Today at ${sessions.first.startsAt.hour}:${sessions.first.startsAt.minute.toString().padLeft(2, '0')}'
-                              : 'Today at 5:00 PM',
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Date: ${next.date} at ${next.startsAt.hour}:${next.startsAt.minute.toString().padLeft(2, '0')}',
+                            style: const TextStyle(color: Colors.white, fontSize: 14),
+                          ),
+                        ],
+                      );
+                    },
                     loading: () => const AppLoader.inline(color: Colors.white),
-                    error: (_, _) => const Text('Mathematics', style: TextStyle(color: Colors.white, fontSize: 18)),
+                    error: (_, _) => const Text('Tuition Classes', style: TextStyle(color: Colors.white, fontSize: 18)),
                   ),
                 ],
               ),
@@ -163,7 +173,8 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
 
           sessionsState.when(
             data: (sessions) {
-              if (sessions.isEmpty) {
+              final activeSessions = sessions.where((s) => s.status != 'cancelled').toList();
+              if (activeSessions.isEmpty) {
                 return const EmptyStateWidget(
                   icon: Icons.calendar_today_rounded,
                   title: 'No classes scheduled',
@@ -171,16 +182,20 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
                 );
               }
               return Column(
-                children: sessions.take(4).map((session) => Card(
+                children: activeSessions.map((session) => Card(
                   margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.book_outlined, size: 20),
+                    leading: CircleAvatar(
+                      child: Icon(
+                        session.location.type == 'online' ? Icons.video_call_rounded : Icons.book_outlined,
+                        size: 20,
+                      ),
                     ),
                     title: Text(session.subject),
                     subtitle: Text(
-                      '${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')} • ${session.durationMinutes} mins',
+                      'Date: ${session.date} • ${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')} (${session.durationMinutes} mins)',
                     ),
+                    trailing: StatusChip.present(label: session.status.toUpperCase()),
                   ),
                 )).toList(),
               );
@@ -191,29 +206,58 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
         ],
       ),
 
-      // Schedule Tab
+      // Schedule Tab - Enrolled Subjects & All Weekly Classes
       ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
           Text(scheduleHeader, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: AppSpacing.md),
-          sessionsState.when(
-            data: (sessions) {
-              if (sessions.isEmpty) {
-                return const EmptyStateWidget(
-                  icon: Icons.calendar_today_rounded,
-                  title: 'No schedule found',
-                  description: 'Class sessions will appear here.',
+
+          weeklyClassesState.when(
+            data: (classes) {
+              if (classes.isEmpty) {
+                // Fall back to active sessions if weekly class docs not directly queried
+                return sessionsState.when(
+                  data: (sessions) {
+                    if (sessions.isEmpty) {
+                      return const EmptyStateWidget(
+                        icon: Icons.calendar_today_rounded,
+                        title: 'No schedule found',
+                        description: 'Enrolled class sessions will appear here.',
+                      );
+                    }
+                    return Column(
+                      children: sessions.map((session) => Card(
+                        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: ListTile(
+                          leading: const Icon(Icons.menu_book_rounded, color: AppColors.primaryTeal),
+                          title: Text(session.subject),
+                          subtitle: Text('Date: ${session.date} • ${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')}'),
+                          trailing: StatusChip.present(label: session.status.toUpperCase()),
+                        ),
+                      )).toList(),
+                    );
+                  },
+                  loading: () => const AppLoader.inline(),
+                  error: (_, _) => const SizedBox.shrink(),
                 );
               }
+
               return Column(
-                children: sessions.map((session) => Card(
+                children: classes.map((cls) => Card(
                   margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: ListTile(
-                    leading: const Icon(Icons.calendar_month_rounded),
-                    title: Text(session.subject),
-                    subtitle: Text('Duration: ${session.durationMinutes} minutes'),
-                    trailing: const StatusChip.present(label: 'Scheduled'),
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.primaryTeal.withValues(alpha: 0.1),
+                      child: const Icon(Icons.school_rounded, color: AppColors.primaryTeal),
+                    ),
+                    title: Text(cls.subject, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                      '${cls.classLevel} • ${_formatWeekdays(cls.weekdays)} at ${cls.startTime} (${cls.durationMin} mins)',
+                    ),
+                    trailing: StatusChip.present(
+                      label: cls.location.type.toUpperCase(),
+                    ),
                   ),
                 )).toList(),
               );
@@ -262,5 +306,10 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
         ],
       ),
     );
+  }
+
+  String _formatWeekdays(List<int> weekdays) {
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return weekdays.map((w) => (w >= 1 && w <= 7) ? names[w - 1] : '').where((s) => s.isNotEmpty).join(', ');
   }
 }

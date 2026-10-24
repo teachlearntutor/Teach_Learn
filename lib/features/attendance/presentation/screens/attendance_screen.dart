@@ -7,6 +7,8 @@ import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/status_chip.dart';
 import '../../../schedule/presentation/providers/class_session_providers.dart';
+import '../../../students/domain/models/student.dart';
+import '../../../students/presentation/providers/student_providers.dart';
 import '../../domain/models/attendance_record.dart';
 import '../providers/attendance_providers.dart';
 import 'mark_attendance_screen.dart';
@@ -19,6 +21,7 @@ class AttendanceScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionsState = ref.watch(classSessionsProvider);
     final attendanceState = ref.watch(attendanceProvider);
+    final studentsState = ref.watch(studentsProvider);
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -142,8 +145,27 @@ class AttendanceScreen extends ConsumerWidget {
               );
             }
 
+            final students = studentsState.value ?? [];
+
             return Column(
               children: records.take(10).map((record) {
+                final student = students.firstWhere(
+                  (s) => s.id == record.studentId,
+                  orElse: () => Student(
+                    id: record.studentId,
+                    code: 'S-4K2P',
+                    name: 'Student',
+                    searchName: 'student',
+                    classLevel: 'Class',
+                    classSort: 9,
+                    subjects: [],
+                    startDate: '',
+                    status: StudentStatus.active,
+                    createdAt: DateTime.now(),
+                    updatedAt: DateTime.now(),
+                  ),
+                );
+
                 final isPresent = record.status == AttendanceStatus.present;
                 final isAbsent = record.status == AttendanceStatus.absent;
 
@@ -158,9 +180,9 @@ class AttendanceScreen extends ConsumerWidget {
                           ? AppColors.success
                           : (isAbsent ? AppColors.danger : AppColors.warning),
                     ),
-                    title: Text('Student ID: ${record.studentId}'),
+                    title: Text(student.name.isNotEmpty ? student.name : 'Student'),
                     subtitle: Text(
-                      'Date: ${record.date}${record.reason != null ? " • Reason: ${record.reason}" : ""}',
+                      '${student.classLevel} • Date: ${record.date}${record.reason != null ? " • Reason: ${record.reason}" : ""}',
                     ),
                     trailing: StatusChip.present(
                       label: record.status.name.toUpperCase(),
