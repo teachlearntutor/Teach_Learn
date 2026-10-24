@@ -102,11 +102,11 @@ class AttendanceScreen extends ConsumerWidget {
                         ),
                       ),
                       title: Text(
-                        session.subject,
+                        session.subject.isNotEmpty ? session.subject : 'Tuition Session',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       subtitle: Text(
-                        'Date: ${session.date} • ${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')}',
+                        'Date: ${session.date.isNotEmpty ? session.date : "${session.startsAt.year}-${session.startsAt.month.toString().padLeft(2, '0')}-${session.startsAt.day.toString().padLeft(2, '0')}"} • ${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')}',
                       ),
                       trailing: StatusChip.present(
                         label: isPending ? 'Pending' : 'Marked',

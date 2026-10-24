@@ -74,6 +74,10 @@ class _MarkAttendanceScreenState extends ConsumerState<MarkAttendanceScreen> {
       final uid = user?.uid ?? '';
       final now = DateTime.now();
 
+      final dateStr = widget.session.date.isNotEmpty
+          ? widget.session.date
+          : '${widget.session.startAt.year}-${widget.session.startAt.month.toString().padLeft(2, '0')}-${widget.session.startAt.day.toString().padLeft(2, '0')}';
+
       final records = enrolledStudents.map((student) {
         final status = _statuses[student.id] ?? AttendanceStatus.present;
         final reasonText = _reasonControllers[student.id]?.text.trim();
@@ -86,7 +90,7 @@ class _MarkAttendanceScreenState extends ConsumerState<MarkAttendanceScreen> {
           sessionId: widget.session.id,
           classId: widget.session.classId,
           studentId: student.id,
-          date: widget.session.date,
+          date: dateStr,
           startAt: widget.session.startAt,
           status: status,
           reason: reason,
@@ -129,13 +133,18 @@ class _MarkAttendanceScreenState extends ConsumerState<MarkAttendanceScreen> {
     final studentsState = ref.watch(studentsProvider);
     final attendanceState = ref.watch(attendanceProvider);
 
+    final subjectText = widget.session.subject.isNotEmpty ? widget.session.subject : 'Class Session';
+    final dateDisplay = widget.session.date.isNotEmpty
+        ? widget.session.date
+        : '${widget.session.startAt.year}-${widget.session.startAt.month.toString().padLeft(2, '0')}-${widget.session.startAt.day.toString().padLeft(2, '0')}';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Attendance • ${widget.session.subject}'),
+        title: Text('Attendance • $subjectText'),
       ),
       body: studentsState.when(
         data: (allStudents) {
-          // Filter enrolled students for this session by studentIds or classLevel
+          // Filter enrolled students for this session by studentIds or active status
           final enrolled = allStudents.where((s) {
             if (widget.session.studentIds.isNotEmpty) {
               return widget.session.studentIds.contains(s.id);
@@ -169,9 +178,12 @@ class _MarkAttendanceScreenState extends ConsumerState<MarkAttendanceScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            widget.session.subject,
-                            style: Theme.of(context).textTheme.titleLarge,
+                          Expanded(
+                            child: Text(
+                              subjectText,
+                              style: Theme.of(context).textTheme.titleLarge,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                           StatusChip.present(
                             label: widget.session.attendanceMarked ? 'Already Marked' : 'Pending',
@@ -180,21 +192,28 @@ class _MarkAttendanceScreenState extends ConsumerState<MarkAttendanceScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Date: ${widget.session.date} • ${widget.session.startsAt.hour}:${widget.session.startsAt.minute.toString().padLeft(2, '0')} (${widget.session.durationMinutes} mins)',
+                        'Date: $dateDisplay • ${widget.session.startsAt.hour}:${widget.session.startsAt.minute.toString().padLeft(2, '0')} (${widget.session.durationMinutes} mins)',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           Text(
                             'Enrolled Students: ${enrolled.length}',
                             style: Theme.of(context).textTheme.labelMedium,
                           ),
                           OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              visualDensity: VisualDensity.compact,
+                            ),
                             onPressed: () => _markAllPresent(enrolled),
                             icon: const Icon(Icons.done_all_rounded, size: 16),
-                            label: const Text('Mark All Present'),
+                            label: const Text('Mark All Present', style: TextStyle(fontSize: 12)),
                           ),
                         ],
                       ),
@@ -249,31 +268,41 @@ class _MarkAttendanceScreenState extends ConsumerState<MarkAttendanceScreen> {
                         ),
                         const SizedBox(height: AppSpacing.md),
 
-                        // Segmented Button: Present / Absent / Late
-                        SegmentedButton<AttendanceStatus>(
-                          segments: const [
-                            ButtonSegment(
-                              value: AttendanceStatus.present,
-                              label: Text('Present'),
-                              icon: Icon(Icons.check_circle_outline, size: 16),
+                        // Compact Segmented Button: Present / Absent / Late
+                        SizedBox(
+                          width: double.infinity,
+                          child: SegmentedButton<AttendanceStatus>(
+                            style: ButtonStyle(
+                              padding: WidgetStateProperty.all(EdgeInsets.zero),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              textStyle: WidgetStateProperty.all(
+                                const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
                             ),
-                            ButtonSegment(
-                              value: AttendanceStatus.absent,
-                              label: Text('Absent'),
-                              icon: Icon(Icons.cancel_outlined, size: 16),
-                            ),
-                            ButtonSegment(
-                              value: AttendanceStatus.late,
-                              label: Text('Late'),
-                              icon: Icon(Icons.access_time, size: 16),
-                            ),
-                          ],
-                          selected: {status},
-                          onSelectionChanged: (newSelection) {
-                            setState(() {
-                              _statuses[student.id] = newSelection.first;
-                            });
-                          },
+                            segments: const [
+                              ButtonSegment(
+                                value: AttendanceStatus.present,
+                                label: Text('Present'),
+                                icon: Icon(Icons.check_circle_outline, size: 14),
+                              ),
+                              ButtonSegment(
+                                value: AttendanceStatus.absent,
+                                label: Text('Absent'),
+                                icon: Icon(Icons.cancel_outlined, size: 14),
+                              ),
+                              ButtonSegment(
+                                value: AttendanceStatus.late,
+                                label: Text('Late'),
+                                icon: Icon(Icons.access_time, size: 14),
+                              ),
+                            ],
+                            selected: {status},
+                            onSelectionChanged: (newSelection) {
+                              setState(() {
+                                _statuses[student.id] = newSelection.first;
+                              });
+                            },
+                          ),
                         ),
 
                         // Absence Reason Input Field
