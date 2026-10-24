@@ -125,7 +125,13 @@ class AttendanceScreen extends ConsumerWidget {
             );
           },
           loading: () => const AppLoader.inline(),
-          error: (err, _) => Center(child: Text('Error: $err')),
+          error: (err, _) => EmptyStateWidget(
+            icon: Icons.calendar_today_rounded,
+            title: 'Classes Unavailable',
+            description: 'Could not load classes. Tap Retry to refresh.',
+            actionLabel: 'Retry',
+            onActionPressed: () => ref.invalidate(classSessionsProvider),
+          ),
         ),
 
         const SizedBox(height: AppSpacing.lg),
@@ -193,7 +199,13 @@ class AttendanceScreen extends ConsumerWidget {
             );
           },
           loading: () => const AppLoader.inline(),
-          error: (err, _) => Center(child: Text('Error: $err')),
+          error: (err, _) => EmptyStateWidget(
+            icon: Icons.shield_outlined,
+            title: 'Attendance Unavailable',
+            description: 'Please publish updated firestore.rules in Firebase Console or tap Retry.',
+            actionLabel: 'Retry',
+            onActionPressed: () => ref.invalidate(attendanceStreamProvider),
+          ),
         ),
       ],
     );
