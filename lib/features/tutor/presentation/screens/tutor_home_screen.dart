@@ -307,26 +307,47 @@ class _TutorDashboardView extends ConsumerWidget {
 
         sessionsState.when(
           data: (sessions) {
-            if (sessions.isEmpty) {
+            final activeSessions = sessions.where((s) => s.status != 'cancelled').toList();
+
+            if (activeSessions.isEmpty) {
               return const EmptyStateWidget(
                 icon: Icons.event_available_rounded,
                 title: 'No classes today',
                 description: 'Enjoy your free day or schedule a new class.',
               );
             }
+
             return Column(
-              children: sessions.take(3).map((session) {
+              children: activeSessions.take(4).map((session) {
+                final subjectName = session.subject.trim().isNotEmpty
+                    ? session.subject
+                    : 'Tuition Class';
+                final duration = session.durationMinutes > 0 ? session.durationMinutes : 60;
+                final timeDisplay = _formatTimeOfDay(session.startsAt);
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.book_outlined, size: 20),
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.primaryTeal.withValues(alpha: 0.1),
+                      child: Icon(
+                        session.location.type == 'online'
+                            ? Icons.video_call_rounded
+                            : Icons.menu_book_rounded,
+                        color: AppColors.primaryTeal,
+                        size: 20,
+                      ),
                     ),
-                    title: Text(session.subject),
+                    title: Text(
+                      subjectName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     subtitle: Text(
-                      '${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')} • ${session.durationMinutes} mins',
+                      '$timeDisplay • $duration mins ${session.location.type == "online" ? "(Online)" : ""}',
                     ),
-                    trailing: const StatusChip.present(label: 'Upcoming'),
+                    trailing: StatusChip.present(
+                      label: session.attendanceMarked ? 'Marked' : 'Upcoming',
+                    ),
                   ),
                 );
               }).toList(),
@@ -337,6 +358,13 @@ class _TutorDashboardView extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  String _formatTimeOfDay(DateTime dt) {
+    final h = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+    final m = dt.minute.toString().padLeft(2, '0');
+    final period = dt.hour >= 12 ? 'PM' : 'AM';
+    return '$h:$m $period';
   }
 }
 
