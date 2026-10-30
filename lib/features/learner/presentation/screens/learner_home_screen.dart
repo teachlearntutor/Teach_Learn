@@ -9,9 +9,10 @@ import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/status_chip.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../marketplace/presentation/screens/find_tutor_screen.dart';
+import '../../../marketplace/presentation/screens/my_requests_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../schedule/presentation/providers/class_session_providers.dart';
-import '../../../schedule/presentation/providers/schedule_providers.dart';
 
 class LearnerHomeScreen extends ConsumerStatefulWidget {
   const LearnerHomeScreen({super.key, this.onThemeModeChanged});
@@ -49,7 +50,6 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
     final scheduleHeader = isParent ? 'Child\'s Class Schedule' : 'Your Class Schedule';
 
     final sessionsState = ref.watch(classSessionsProvider);
-    final weeklyClassesState = ref.watch(weeklyClassesStreamProvider);
 
     final tabs = [
       // Home Tab
@@ -206,67 +206,11 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
         ],
       ),
 
-      // Schedule Tab - Enrolled Subjects & All Weekly Classes
-      ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          Text(scheduleHeader, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: AppSpacing.md),
+      // Find Tutor Tab
+      const FindTutorScreen(),
 
-          weeklyClassesState.when(
-            data: (classes) {
-              if (classes.isEmpty) {
-                // Fall back to active sessions if weekly class docs not directly queried
-                return sessionsState.when(
-                  data: (sessions) {
-                    if (sessions.isEmpty) {
-                      return const EmptyStateWidget(
-                        icon: Icons.calendar_today_rounded,
-                        title: 'No schedule found',
-                        description: 'Enrolled class sessions will appear here.',
-                      );
-                    }
-                    return Column(
-                      children: sessions.map((session) => Card(
-                        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: ListTile(
-                          leading: const Icon(Icons.menu_book_rounded, color: AppColors.primaryTeal),
-                          title: Text(session.subject),
-                          subtitle: Text('Date: ${session.date} • ${session.startsAt.hour}:${session.startsAt.minute.toString().padLeft(2, '0')}'),
-                          trailing: StatusChip.present(label: session.status.toUpperCase()),
-                        ),
-                      )).toList(),
-                    );
-                  },
-                  loading: () => const AppLoader.inline(),
-                  error: (_, _) => const SizedBox.shrink(),
-                );
-              }
-
-              return Column(
-                children: classes.map((cls) => Card(
-                  margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: AppColors.primaryTeal.withValues(alpha: 0.1),
-                      child: const Icon(Icons.school_rounded, color: AppColors.primaryTeal),
-                    ),
-                    title: Text(cls.subject, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(
-                      '${cls.classLevel} • ${_formatWeekdays(cls.weekdays)} at ${cls.startTime} (${cls.durationMin} mins)',
-                    ),
-                    trailing: StatusChip.present(
-                      label: cls.location.type.toUpperCase(),
-                    ),
-                  ),
-                )).toList(),
-              );
-            },
-            loading: () => const AppLoader.inline(),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
-        ],
-      ),
+      // My Requests Tab
+      const MyRequestsScreen(),
 
       // Profile Tab
       const ProfileScreen(),
@@ -294,9 +238,14 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.calendar_today_outlined),
-            selectedIcon: Icon(Icons.calendar_today_rounded),
-            label: 'Schedule',
+            icon: Icon(Icons.search_rounded),
+            selectedIcon: Icon(Icons.search_rounded),
+            label: 'Find Tutor',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.mail_outline_rounded),
+            selectedIcon: Icon(Icons.mail_rounded),
+            label: 'My Requests',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
@@ -306,10 +255,5 @@ class _LearnerHomeScreenState extends ConsumerState<LearnerHomeScreen> {
         ],
       ),
     );
-  }
-
-  String _formatWeekdays(List<int> weekdays) {
-    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return weekdays.map((w) => (w >= 1 && w <= 7) ? names[w - 1] : '').where((s) => s.isNotEmpty).join(', ');
   }
 }

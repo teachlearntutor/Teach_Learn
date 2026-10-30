@@ -14,6 +14,8 @@ This document describes the Cloud Firestore data structures, subcollections, and
   ├── /holidays/{holidayId}             -> User Holidays Subcollection
   └── /attendance/{sessionId_studentId} -> Attendance Records Subcollection
 
+/tutorProfiles/{tutorUid}              -> Public Tutor Finder Profiles
+/lessonRequests/{fromUid_toUid}        -> Lesson Inquiry Requests
 /publicIds/{publicId}                  -> Global Reserved Short Codes (TL-XXXXX)
 ```
 
@@ -97,3 +99,33 @@ This document describes the Cloud Firestore data structures, subcollections, and
 - `status` (string): Roll call status (`present`, `absent`, `late`).
 - `reason` (string, optional): Absence or late reason.
 - `markedAt` (timestamp): Timestamp when roll call was saved.
+
+---
+
+### 6. Public Tutor Profiles Collection (`/tutorProfiles/{tutorUid}`)
+- `displayName` (string): Tutor display name.
+- `publicId` (string): Public ID code.
+- `headline` (string): Profile headline.
+- `bio` (string): Teaching bio and background.
+- `subjects` (array of strings): Subjects taught.
+- `levels` (array of strings): Classes/grades taught.
+- `city` (string): City location.
+- `area` (string): Area/sector location.
+- `mode` (string): Teaching mode (`home`, `online`, `both`).
+- `experienceYears` (number): Years of experience.
+- `availableDays` (array of strings): Days available for tutoring.
+- `isPublished` (boolean): Visibility switch in Tutor Finder.
+- `createdAt` (timestamp): Creation timestamp.
+- `updatedAt` (timestamp): Last update timestamp.
+
+---
+
+### 7. Lesson Requests Collection (`/lessonRequests/{fromUid_toUid}`)
+- `fromUid` (string): Student/Parent user UID.
+- `toUid` (string): Tutor user UID.
+- `fromName` (string): Student/Parent display name.
+- `subject` (string): Subject requested.
+- `message` (string): Message details.
+- `status` (string): Request status (`pending`, `accepted`, `declined`, `cancelled`).
+- `createdAt` (timestamp): Creation timestamp.
+- `updatedAt` (timestamp): Last update timestamp.

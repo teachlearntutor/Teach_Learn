@@ -16,6 +16,8 @@ import '../../../../core/widgets/status_chip.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/presentation/screens/auth_screen.dart';
+import '../../../marketplace/presentation/screens/public_profile_screen.dart';
+import '../../../marketplace/presentation/screens/tutor_requests_screen.dart';
 
 const List<Color> _kAvatarColors = [
   AppColors.primaryTeal,
@@ -67,7 +69,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           if (index >= 0 && index < _kAvatarColors.length) {
             _selectedAvatarColorIndex = index;
           }
-          // Gracefully verify image file exists before setting path
           if (imagePath != null && File(imagePath).existsSync()) {
             _profileImagePath = imagePath;
           } else {
@@ -102,7 +103,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
 
       if (image != null) {
-        // Copy image into persistent app documents directory to survive cache clearing
         final appDocDir = await getApplicationDocumentsDirectory();
         final extension = image.path.contains('.') ? image.path.split('.').last : 'jpg';
         final savedImageFile = File('${appDocDir.path}/profile_$uid.$extension');
@@ -624,6 +624,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final profileData = profileState?.asData?.value;
     final role = (profileData?['role'] as String? ?? 'tutor').toUpperCase();
     final publicId = profileData?['publicId'] as String? ?? '';
+    final isTutor = role == 'TUTOR';
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -757,6 +758,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
         ),
+
+        // Tutor Finder Marketplace Tools (Only for Tutors)
+        if (isTutor) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text('Tutor Finder Marketplace', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.storefront_outlined, color: AppColors.primaryTeal),
+                  title: const Text('Public Tutor Profile'),
+                  subtitle: const Text('Set bio, subjects, city, and visibility'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(builder: (_) => const PublicProfileScreen()),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.mail_outline_rounded, color: AppColors.primaryTeal),
+                  title: const Text('Lesson Requests'),
+                  subtitle: const Text('View and accept requests from students/parents'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(builder: (_) => const TutorRequestsScreen()),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
 
         const SizedBox(height: AppSpacing.md),
         Text('App Preferences', style: Theme.of(context).textTheme.titleMedium),

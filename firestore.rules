@@ -52,12 +52,40 @@ service cloud.firestore {
       match /holidays/{id=**}   { allow read, write: if isOwner(userId); }
     }
 
+    // Tutor Marketplace Profiles
+    match /tutorProfiles/{tutorUid} {
+      allow read: if isSignedIn() && (resource == null || resource.data.isPublished == true || request.auth.uid == tutorUid);
+      allow create, update: if isOwner(tutorUid)
+        && request.resource.data.displayName is string
+        && request.resource.data.isPublished is bool;
+      allow delete: if isOwner(tutorUid);
+    }
+
+    // Lesson Requests
+    match /lessonRequests/{requestId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+
+      allow create: if isSignedIn()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      allow update: if isSignedIn() && (
+        (request.auth.uid == resource.data.toUid && request.resource.data.status in ['accepted', 'declined']) ||
+        (request.auth.uid == resource.data.fromUid && request.resource.data.status == 'cancelled')
+      );
+
+      allow delete: if false;
+    }
+
+    // Public ID reservations (create-only, no read/update/delete)
     match /publicIds/{publicId} {
+      // get is needed because sign up checks whether a code is still free
       allow get: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
       allow list, update, delete: if false;
     }
 
+    // Default deny all other paths
     match /{document=**} {
       allow read, write: if false;
     }

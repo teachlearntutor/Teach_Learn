@@ -9,6 +9,9 @@ import '../../../../core/widgets/status_chip.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../../../attendance/presentation/screens/attendance_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../marketplace/domain/models/lesson_request.dart';
+import '../../../marketplace/presentation/providers/marketplace_providers.dart';
+import '../../../marketplace/presentation/screens/tutor_requests_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../schedule/presentation/providers/class_session_providers.dart';
 import '../../../schedule/presentation/screens/schedule_screen.dart';
@@ -129,6 +132,7 @@ class _TutorDashboardView extends ConsumerWidget {
     final studentsState = ref.watch(studentsProvider);
     final activeCount = ref.watch(activeStudentsCountProvider);
     final sessionsState = ref.watch(classSessionsProvider);
+    final tutorRequestsState = ref.watch(tutorRequestsStreamProvider);
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -182,6 +186,56 @@ class _TutorDashboardView extends ConsumerWidget {
               ],
             ),
           ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+
+        // Lesson Requests Card with Badge
+        tutorRequestsState.when(
+          data: (requests) {
+            final pendingCount = requests.where((r) => r.status == LessonRequestStatus.pending).length;
+
+            return Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.primaryTeal.withValues(alpha: 0.12),
+                  child: const Icon(Icons.mail_outline_rounded, color: AppColors.primaryTeal),
+                ),
+                title: const Text('Lesson Requests', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  pendingCount > 0
+                      ? '$pendingCount new request(s) waiting for response'
+                      : 'No new pending lesson requests',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (pendingCount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$pendingCount',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(builder: (_) => const TutorRequestsScreen()),
+                  );
+                },
+              ),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
         ),
         const SizedBox(height: AppSpacing.md),
 
