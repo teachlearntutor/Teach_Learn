@@ -81,7 +81,7 @@ class _AppButtonState extends State<AppButton> {
       case AppButtonVariant.primary:
         backgroundColor = isDisabled
             ? (isDark ? AppColors.surfaceDark : AppColors.borderLight)
-            : (isDark ? AppColors.primaryTealLight : AppColors.primaryTeal);
+            : (isDark ? AppColors.primaryLight : AppColors.primary);
         textColor = isDisabled
             ? (isDark ? AppColors.darkInkMuted : AppColors.inkMuted)
             : Colors.white;
@@ -90,10 +90,10 @@ class _AppButtonState extends State<AppButton> {
       case AppButtonVariant.accent:
         backgroundColor = isDisabled
             ? (isDark ? AppColors.surfaceDark : AppColors.borderLight)
-            : AppColors.accentTeal;
+            : (isDark ? AppColors.secondary : AppColors.primary);
         textColor = isDisabled
             ? (isDark ? AppColors.darkInkMuted : AppColors.inkMuted)
-            : AppColors.ink;
+            : Colors.white;
         break;
 
       case AppButtonVariant.secondary:

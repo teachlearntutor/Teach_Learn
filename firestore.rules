@@ -14,6 +14,12 @@ service cloud.firestore {
       return role == 'tutor' || role == 'student' || role == 'parent';
     }
 
+    function isTutorUser() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tutor';
+    }
+
     function validStudent(d) {
       return d.name is string
       && d.name.size() >= 1 && d.name.size() <= 80
@@ -21,6 +27,21 @@ service cloud.firestore {
       && d.classLevel is string
       && d.subjects is list
       && d.subjects.size() <= 10;
+    }
+
+    function validTutorProfile(d) {
+      return d.displayName is string
+      && d.isPublished is bool
+      && d.headline is string && d.headline.size() <= 100
+      && d.bio is string && d.bio.size() <= 1000
+      && d.subjects is list && d.subjects.size() <= 10
+      && d.levels is list && d.levels.size() <= 10;
+    }
+
+    function validLessonRequest(d, reqId) {
+      return reqId == d.fromUid + '_' + d.toUid
+      && d.subject is string && d.subject.size() <= 60
+      && d.message is string && d.message.size() <= 500;
     }
 
     match /users/{userId} {
@@ -56,22 +77,51 @@ service cloud.firestore {
     match /tutorProfiles/{tutorUid} {
       allow read: if isSignedIn() && (resource == null || resource.data.isPublished == true || request.auth.uid == tutorUid);
       allow create, update: if isOwner(tutorUid)
-        && request.resource.data.displayName is string
-        && request.resource.data.isPublished is bool;
+        && isTutorUser()
+        && validTutorProfile(request.resource.data);
       allow delete: if isOwner(tutorUid);
+
+      // Private contact subcollection (phone number)
+      match /private/contact {
+        allow write: if isOwner(tutorUid);
+        allow read: if isOwner(tutorUid) || (
+          isSignedIn() &&
+          exists(/databases/$(database)/documents/lessonRequests/$(request.auth.uid + '_' + tutorUid)) &&
+          get(/databases/$(database)/documents/lessonRequests/$(request.auth.uid + '_' + tutorUid)).data.status == 'accepted'
+        );
+      }
     }
 
     // Lesson Requests
     match /lessonRequests/{requestId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow read: if isSignedIn() && (
+        resource == null ||
+        request.auth.uid == resource.data.fromUid ||
+        request.auth.uid == resource.data.toUid
+      );
 
       allow create: if isSignedIn()
         && request.resource.data.fromUid == request.auth.uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'pending'
+        && validLessonRequest(request.resource.data, requestId);
 
-      allow update: if isSignedIn() && (
-        (request.auth.uid == resource.data.toUid && request.resource.data.status in ['accepted', 'declined']) ||
-        (request.auth.uid == resource.data.fromUid && request.resource.data.status == 'cancelled')
+      allow update: if isSignedIn() && validLessonRequest(request.resource.data, requestId) && (
+        // Tutor accept/decline when pending
+        (request.auth.uid == resource.data.toUid
+          && resource.data.status == 'pending'
+          && request.resource.data.status in ['accepted', 'declined']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        ||
+        // Learner cancel when pending or accepted (declined stays blocked)
+        (request.auth.uid == resource.data.fromUid
+          && resource.data.status in ['pending', 'accepted']
+          && request.resource.data.status == 'cancelled'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        ||
+        // Learner re-request after cancel
+        (request.auth.uid == resource.data.fromUid
+          && resource.data.status == 'cancelled'
+          && request.resource.data.status == 'pending')
       );
 
       allow delete: if false;
@@ -79,7 +129,6 @@ service cloud.firestore {
 
     // Public ID reservations (create-only, no read/update/delete)
     match /publicIds/{publicId} {
-      // get is needed because sign up checks whether a code is still free
       allow get: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
       allow list, update, delete: if false;

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radii.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/contact_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_text_field.dart';
@@ -23,7 +24,7 @@ class TutorDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
-  Future<void> _showSendRequestModal() async {
+  Future<void> _showSendRequestModal(bool isResend) async {
     final subjectController = TextEditingController(
       text: widget.tutor.subjects.isNotEmpty ? widget.tutor.subjects.first : 'Mathematics',
     );
@@ -48,7 +49,7 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Send Lesson Request', style: Theme.of(context).textTheme.headlineSmall),
+              Text(isResend ? 'Re-send Lesson Request' : 'Send Lesson Request', style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: AppSpacing.xs),
               Text('To: ${widget.tutor.displayName}', style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: AppSpacing.md),
@@ -67,7 +68,7 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
               const SizedBox(height: AppSpacing.lg),
 
               AppButton.primary(
-                label: isSending ? 'Sending Request...' : 'Send Request',
+                label: isSending ? 'Sending Request...' : (isResend ? 'Re-send Request' : 'Send Request'),
                 isLoading: isSending,
                 isFullWidth: true,
                 onPressed: isSending
@@ -95,7 +96,11 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
                           );
 
                           final repo = ref.read(marketplaceRepositoryProvider);
-                          await repo.sendLessonRequest(request);
+                          if (isResend) {
+                            await repo.resendLessonRequestAfterCancel(request);
+                          } else {
+                            await repo.createLessonRequest(request);
+                          }
 
                           nav.pop();
                           messenger.showSnackBar(
@@ -141,6 +146,10 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
 
     final isAccepted = existingRequest.id.isNotEmpty && existingRequest.status == LessonRequestStatus.accepted;
     final isPending = existingRequest.id.isNotEmpty && existingRequest.status == LessonRequestStatus.pending;
+    final isCancelled = existingRequest.id.isNotEmpty && existingRequest.status == LessonRequestStatus.cancelled;
+
+    final privatePhoneState = isAccepted ? ref.watch(tutorPrivateContactStreamProvider(widget.tutor.uid)) : null;
+    final phone = privatePhoneState?.asData?.value;
 
     final initials = widget.tutor.displayName.isNotEmpty
         ? widget.tutor.displayName[0].toUpperCase()
@@ -247,7 +256,40 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
                     style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.success),
                   ),
                   const SizedBox(height: 4),
-                  const Text('You can now contact your tutor directly.'),
+                  Text(
+                    phone != null && phone.isNotEmpty
+                        ? 'Tutor Contact: $phone'
+                        : 'Contact details released by tutor.',
+                  ),
+                  if (phone != null && phone.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => makePhoneCall(phone),
+                            icon: const Icon(Icons.phone_rounded, color: AppColors.primaryTeal),
+                            label: const Text('Call Tutor'),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.success,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () => launchWhatsAppContact(
+                              rawPhoneNumber: phone,
+                              studentName: widget.tutor.displayName,
+                            ),
+                            icon: const Icon(Icons.chat_bubble_outline_rounded),
+                            label: const Text('WhatsApp'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -263,9 +305,9 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
             )
           else if (!isAccepted)
             AppButton.primary(
-              label: 'Send Lesson Request',
+              label: isCancelled ? 'Re-send Lesson Request' : 'Send Lesson Request',
               isFullWidth: true,
-              onPressed: _showSendRequestModal,
+              onPressed: () => _showSendRequestModal(isCancelled),
             ),
 
           const SizedBox(height: AppSpacing.xl),

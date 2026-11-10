@@ -32,8 +32,8 @@ class BrandWordmark extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? AppColors.darkInk : AppColors.ink;
     final brandColor = isDark
-        ? AppColors.primaryTealLight
-        : AppColors.primaryTeal;
+        ? AppColors.primaryLight
+        : AppColors.primary;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -83,8 +83,8 @@ class _BrandMarkPainter extends CustomPainter {
     canvas.scale(size.width / 64, size.height / 64);
 
     canvas.drawRRect(
-      RRect.fromLTRBR(0, 0, 64, 64, const Radius.circular(16)),
-      Paint()..color = AppColors.primaryTeal,
+      RRect.fromLTRBR(0, 0, 64, 64, const Radius.circular(12)),
+      Paint()..color = AppColors.primary,
     );
 
     final pages = Paint()..color = Colors.white;
@@ -109,20 +109,20 @@ class _BrandMarkPainter extends CustomPainter {
       ..lineTo(32, 28)
       ..lineTo(12, 19)
       ..close();
-    canvas.drawPath(cap, Paint()..color = AppColors.accentTeal);
+    canvas.drawPath(cap, Paint()..color = AppColors.secondary);
 
     canvas.drawLine(
       const Offset(49, 20),
       const Offset(49, 28),
       Paint()
-        ..color = AppColors.accentTeal
+        ..color = AppColors.secondary
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round,
     );
     canvas.drawCircle(
       const Offset(49, 30),
       2,
-      Paint()..color = AppColors.accentTeal,
+      Paint()..color = AppColors.secondary,
     );
     canvas.restore();
   }

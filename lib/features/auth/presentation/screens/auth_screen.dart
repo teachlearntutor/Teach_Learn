@@ -211,23 +211,31 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       final authRepo = ref.read(authRepositoryProvider);
 
       if (_isSignUp) {
-        // Handle Email Sign Up
+        final emailSignedUp = _emailController.text.trim();
+
+        // 1. Handle Email Sign Up & Firestore Doc Creation
         await authRepo.signUpWithEmail(
           name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
+          email: emailSignedUp,
           password: _passwordController.text,
           role: _selectedRoleString,
         );
 
-        if (!mounted) return;
-        final destination = _selectedRoleString == 'tutor'
-            ? const TutorHomeScreen()
-            : const LearnerHomeScreen();
+        // 2. Sign out immediately after Firestore writes complete
+        await authRepo.signOut();
 
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute<void>(builder: (_) => destination),
-          (route) => false,
-        );
+        if (!mounted) return;
+
+        // 3. Switch to Log in mode, prefill email, clear passwords
+        setState(() {
+          _mode = AuthMode.logIn;
+          _emailController.text = emailSignedUp;
+          _passwordController.clear();
+          _confirmPasswordController.clear();
+        });
+
+        // 4. Show success SnackBar
+        _showSuccessSnackBar('Account created. Please log in.');
       } else {
         // Handle Email Log In
         final user = await authRepo.logInWithEmail(

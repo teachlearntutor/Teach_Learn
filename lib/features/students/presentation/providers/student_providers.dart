@@ -24,6 +24,6 @@ final studentsProvider = Provider<AsyncValue<List<Student>>>((ref) {
 });
 
 final activeStudentsCountProvider = Provider<int>((ref) {
-  final students = ref.watch(studentsProvider).value ?? [];
+  final students = ref.watch(studentsProvider).valueOrNull ?? [];
   return students.where((s) => s.status == StudentStatus.active).length;
 });

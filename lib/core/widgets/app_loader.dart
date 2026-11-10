@@ -66,8 +66,8 @@ class _AppLoaderState extends State<AppLoader>
     final strokeColor =
         widget.color ??
         (Theme.of(context).brightness == Brightness.dark
-            ? AppColors.primaryTealLight
-            : AppColors.primaryTeal);
+            ? AppColors.primaryLight
+            : AppColors.primary);
 
     final loader = AnimatedBuilder(
       animation: _controller,

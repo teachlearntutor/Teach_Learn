@@ -5,10 +5,23 @@ import '../domain/models/tutor_profile.dart';
 abstract class MarketplaceRepository {
   Stream<TutorProfile?> watchTutorProfile(String uid);
   Future<void> saveTutorProfile(TutorProfile profile);
+
+  Stream<String?> watchTutorPrivateContact(String tutorUid);
+  Future<void> saveTutorPrivateContact({required String uid, required String phone});
+
+  Future<List<TutorProfile>> fetchPublishedTutorsPageProfiles({
+    int limit = 20,
+    String? startAfterUid,
+  });
+
   Stream<List<TutorProfile>> watchPublishedTutors({int limit = 20});
-  Future<void> sendLessonRequest(LessonRequest request);
+
+  Future<void> createLessonRequest(LessonRequest request);
+  Future<void> resendLessonRequestAfterCancel(LessonRequest request);
+
   Stream<List<LessonRequest>> watchTutorRequests(String tutorUid);
   Stream<List<LessonRequest>> watchLearnerRequests(String learnerUid);
+
   Future<void> updateRequestStatus({
     required String requestId,
     required LessonRequestStatus status,
@@ -38,10 +51,59 @@ class FirestoreMarketplaceRepository implements MarketplaceRepository {
 
   @override
   Future<void> saveTutorProfile(TutorProfile profile) async {
-    await _tutorsRef.doc(profile.uid).set(
-          profile.toFirestore(),
-          SetOptions(merge: true),
-        );
+    final docRef = _tutorsRef.doc(profile.uid);
+    final docSnap = await docRef.get();
+
+    final data = profile.toFirestore();
+    if (docSnap.exists) {
+      data.remove('createdAt'); // Preserve original createdAt timestamp
+    }
+
+    await docRef.set(data, SetOptions(merge: true));
+  }
+
+  @override
+  Stream<String?> watchTutorPrivateContact(String tutorUid) {
+    if (tutorUid.isEmpty) return Stream.value(null);
+    return _tutorsRef
+        .doc(tutorUid)
+        .collection('private')
+        .doc('contact')
+        .snapshots()
+        .map((doc) {
+      if (!doc.exists || doc.data() == null) return null;
+      return doc.data()!['phone'] as String?;
+    });
+  }
+
+  @override
+  Future<void> saveTutorPrivateContact({required String uid, required String phone}) async {
+    await _tutorsRef
+        .doc(uid)
+        .collection('private')
+        .doc('contact')
+        .set({'phone': phone.trim(), 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+  }
+
+  @override
+  Future<List<TutorProfile>> fetchPublishedTutorsPageProfiles({
+    int limit = 20,
+    String? startAfterUid,
+  }) async {
+    Query<Map<String, dynamic>> query = _tutorsRef
+        .where('isPublished', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+
+    if (startAfterUid != null && startAfterUid.isNotEmpty) {
+      final docSnap = await _tutorsRef.doc(startAfterUid).get();
+      if (docSnap.exists) {
+        query = query.startAfterDocument(docSnap);
+      }
+    }
+
+    final snap = await query.get();
+    return snap.docs.map((doc) => TutorProfile.fromFirestore(doc)).toList();
   }
 
   @override
@@ -58,12 +120,25 @@ class FirestoreMarketplaceRepository implements MarketplaceRepository {
   }
 
   @override
-  Future<void> sendLessonRequest(LessonRequest request) async {
+  Future<void> createLessonRequest(LessonRequest request) async {
     final docId = '${request.fromUid}_${request.toUid}';
     await _requestsRef.doc(docId).set(
-          request.copyWith(id: docId).toFirestore(),
-          SetOptions(merge: true),
+          request.copyWith(id: docId, status: LessonRequestStatus.pending).toFirestore(),
         );
+  }
+
+  @override
+  Future<void> resendLessonRequestAfterCancel(LessonRequest request) async {
+    final docId = '${request.fromUid}_${request.toUid}';
+    await _requestsRef.doc(docId).set(
+      {
+        'subject': request.subject,
+        'message': request.message,
+        'status': LessonRequestStatus.pending.name,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
   }
 
   @override

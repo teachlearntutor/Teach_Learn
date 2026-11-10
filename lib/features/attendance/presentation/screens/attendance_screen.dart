@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/error_utils.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/status_chip.dart';
@@ -128,7 +129,7 @@ class AttendanceScreen extends ConsumerWidget {
           error: (err, _) => EmptyStateWidget(
             icon: Icons.calendar_today_rounded,
             title: 'Classes Unavailable',
-            description: 'Could not load classes. Tap Retry to refresh.',
+            description: formatUserFriendlyError(err),
             actionLabel: 'Retry',
             onActionPressed: () => ref.invalidate(classSessionsProvider),
           ),
@@ -151,7 +152,7 @@ class AttendanceScreen extends ConsumerWidget {
               );
             }
 
-            final students = studentsState.value ?? [];
+            final students = studentsState.valueOrNull ?? [];
 
             return Column(
               children: records.take(10).map((record) {
@@ -201,8 +202,8 @@ class AttendanceScreen extends ConsumerWidget {
           loading: () => const AppLoader.inline(),
           error: (err, _) => EmptyStateWidget(
             icon: Icons.shield_outlined,
-            title: 'Attendance Unavailable',
-            description: 'Please publish updated firestore.rules in Firebase Console or tap Retry.',
+            title: 'Attendance History Unavailable',
+            description: formatUserFriendlyError(err),
             actionLabel: 'Retry',
             onActionPressed: () => ref.invalidate(attendanceStreamProvider),
           ),

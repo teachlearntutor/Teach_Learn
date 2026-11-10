@@ -5,6 +5,7 @@ import 'marketplace_repository.dart';
 
 class FakeMarketplaceRepository implements MarketplaceRepository {
   final Map<String, TutorProfile> _profiles = {};
+  final Map<String, String> _privateContacts = {};
   final List<LessonRequest> _requests = [];
 
   final _tutorController = StreamController<List<TutorProfile>>.broadcast();
@@ -44,20 +45,68 @@ class FakeMarketplaceRepository implements MarketplaceRepository {
   }
 
   @override
+  Stream<String?> watchTutorPrivateContact(String tutorUid) {
+    return Stream.value(_privateContacts[tutorUid]);
+  }
+
+  @override
+  Future<void> saveTutorPrivateContact({required String uid, required String phone}) async {
+    _privateContacts[uid] = phone;
+  }
+
+  @override
+  Future<List<TutorProfile>> fetchPublishedTutorsPageProfiles({
+    int limit = 20,
+    String? startAfterUid,
+  }) async {
+    final published = _profiles.values.where((p) => p.isPublished).toList();
+    published.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    int startIndex = 0;
+    if (startAfterUid != null && startAfterUid.isNotEmpty) {
+      final index = published.indexWhere((p) => p.uid == startAfterUid);
+      if (index != -1) {
+        startIndex = index + 1;
+      }
+    }
+
+    if (startIndex >= published.length) return [];
+    final endIndex = (startIndex + limit).clamp(0, published.length);
+    return published.sublist(startIndex, endIndex);
+  }
+
+  @override
   Stream<List<TutorProfile>> watchPublishedTutors({int limit = 20}) {
     scheduleMicrotask(_emitProfiles);
     return _tutorController.stream;
   }
 
   @override
-  Future<void> sendLessonRequest(LessonRequest request) async {
-    final docId = '${request.fromUid}_${request.toUid}';
-    final updated = request.copyWith(id: docId);
+  Future<void> createLessonRequest(LessonRequest request) async {
+    final docId = request.id.isNotEmpty ? request.id : '${request.fromUid}_${request.toUid}';
+    final updated = request.copyWith(id: docId, status: LessonRequestStatus.pending);
     final index = _requests.indexWhere((r) => r.id == docId);
     if (index != -1) {
       _requests[index] = updated;
     } else {
       _requests.add(updated);
+    }
+    _emitRequests();
+  }
+
+  @override
+  Future<void> resendLessonRequestAfterCancel(LessonRequest request) async {
+    final docId = request.id.isNotEmpty ? request.id : '${request.fromUid}_${request.toUid}';
+    final index = _requests.indexWhere((r) => r.id == docId);
+    if (index != -1) {
+      _requests[index] = _requests[index].copyWith(
+        subject: request.subject,
+        message: request.message,
+        status: LessonRequestStatus.pending,
+        updatedAt: DateTime.now(),
+      );
+    } else {
+      _requests.add(request.copyWith(id: docId, status: LessonRequestStatus.pending));
     }
     _emitRequests();
   }
@@ -90,6 +139,10 @@ class FakeMarketplaceRepository implements MarketplaceRepository {
       _requests[index] = _requests[index].copyWith(status: status, updatedAt: DateTime.now());
       _emitRequests();
     }
+  }
+
+  List<LessonRequest> getLearnerRequestsSync(String learnerUid) {
+    return _requests.where((r) => r.fromUid == learnerUid).toList();
   }
 
   void dispose() {

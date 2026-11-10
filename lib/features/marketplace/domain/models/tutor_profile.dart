@@ -35,6 +35,18 @@ class TutorProfile {
     required this.updatedAt,
   });
 
+  int get completenessPercentage {
+    int score = 0;
+    if (headline.trim().isNotEmpty) score += 20;
+    if (bio.trim().isNotEmpty) score += 20;
+    if (subjects.isNotEmpty) score += 20;
+    if (levels.isNotEmpty) score += 20;
+    if (city.trim().isNotEmpty && area.trim().isNotEmpty) score += 20;
+    return score;
+  }
+
+  bool get isCompleteForPublish => completenessPercentage == 100;
+
   Map<String, dynamic> toFirestore() {
     return {
       'displayName': displayName,
@@ -64,7 +76,7 @@ class TutorProfile {
       bio: data['bio'] as String? ?? '',
       subjects: (data['subjects'] as List? ?? []).map((e) => e.toString()).toList(),
       levels: (data['levels'] as List? ?? []).map((e) => e.toString()).toList(),
-      city: data['city'] as String? ?? 'Lahore',
+      city: data['city'] as String? ?? '',
       area: data['area'] as String? ?? '',
       mode: data['mode'] as String? ?? 'both',
       experienceYears: (data['experienceYears'] as num? ?? 1).toInt(),

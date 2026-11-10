@@ -69,7 +69,7 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
 
       // Check for duplicates when adding a new student
       if (existing == null) {
-        final existingStudents = ref.read(studentsProvider).value ?? [];
+        final existingStudents = ref.read(studentsProvider).valueOrNull ?? [];
         final normalizedContact = normalizePakistaniPhoneNumber(_contactController.text.trim());
 
         final isDuplicateName = existingStudents.any((s) => s.name.trim().toLowerCase() == nameStr.toLowerCase());

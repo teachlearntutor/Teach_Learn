@@ -20,14 +20,14 @@ import '../../../marketplace/presentation/screens/public_profile_screen.dart';
 import '../../../marketplace/presentation/screens/tutor_requests_screen.dart';
 
 const List<Color> _kAvatarColors = [
-  AppColors.primaryTeal,
-  AppColors.accentTeal,
+  AppColors.primary,
+  AppColors.secondary,
   AppColors.success,
   AppColors.warning,
   AppColors.danger,
   Color(0xFF3F51B5), // Deep Indigo
   Color(0xFF8E24AA), // Purple Accent
-  Color(0xFF00897B), // Deep Teal
+  Color(0xFF2563EB), // Royal Accent
 ];
 
 /// User-scoped preference key helpers to prevent cross-account profile picture leakage
@@ -300,7 +300,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: AppSpacing.md),
 
             ListTile(
-              leading: const Icon(Icons.fullscreen_rounded, color: AppColors.primaryTeal),
+              leading: Icon(Icons.fullscreen_rounded, color: Theme.of(context).colorScheme.primary),
               title: const Text('View Profile Picture'),
               subtitle: const Text('View picture in full resolution'),
               onTap: () {
@@ -310,7 +310,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.primaryTeal),
+              leading: Icon(Icons.photo_library_outlined, color: Theme.of(context).colorScheme.primary),
               title: const Text('Choose Photo from Gallery'),
               subtitle: const Text('Upload a new photo for your account'),
               onTap: () {
@@ -320,7 +320,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.color_lens_outlined, color: AppColors.primaryTeal),
+              leading: Icon(Icons.color_lens_outlined, color: Theme.of(context).colorScheme.primary),
               title: const Text('Choose Avatar Color Accent'),
               subtitle: const Text('Select a paper-styled background accent'),
               onTap: () {
@@ -542,14 +542,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
             ListTile(
-              leading: const Icon(Icons.email_outlined, color: AppColors.primaryTeal),
+              leading: Icon(Icons.email_outlined, color: Theme.of(context).colorScheme.primary),
               title: const Text('Official Support Email'),
               subtitle: const Text('teachlearntutor@gmail.com'),
               onTap: () => _copyToClipboard('teachlearntutor@gmail.com', 'Support Email'),
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.lock_reset_outlined, color: AppColors.primaryTeal),
+              leading: Icon(Icons.lock_reset_outlined, color: Theme.of(context).colorScheme.primary),
               title: const Text('Password Reset Notice'),
               subtitle: const Text('Password reset emails are sent securely from teachlearntutor@gmail.com'),
             ),
@@ -678,7 +678,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             child: Icon(
                               Icons.camera_alt_outlined,
                               size: 16,
-                              color: isDark ? AppColors.primaryTealLight : AppColors.primaryTeal,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),
@@ -722,12 +722,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? AppColors.primaryTealLight.withValues(alpha: 0.2)
-                                : AppColors.primaryTeal.withValues(alpha: 0.1),
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: isDark ? AppColors.primaryTealLight : AppColors.primaryTeal,
+                              color: Theme.of(context).colorScheme.primary,
                               width: 1.0,
                             ),
                           ),
@@ -739,14 +737,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
-                                  color: isDark ? AppColors.primaryTealLight : AppColors.primaryTeal,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                               ),
                               const SizedBox(width: 4),
                               Icon(
                                 Icons.copy_rounded,
                                 size: 14,
-                                color: isDark ? AppColors.primaryTealLight : AppColors.primaryTeal,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ],
                           ),
@@ -768,7 +766,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.storefront_outlined, color: AppColors.primaryTeal),
+                  leading: Icon(Icons.storefront_outlined, color: Theme.of(context).colorScheme.primary),
                   title: const Text('Public Tutor Profile'),
                   subtitle: const Text('Set bio, subjects, city, and visibility'),
                   trailing: const Icon(Icons.chevron_right_rounded),
@@ -781,7 +779,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.mail_outline_rounded, color: AppColors.primaryTeal),
+                  leading: Icon(Icons.mail_outline_rounded, color: Theme.of(context).colorScheme.primary),
                   title: const Text('Lesson Requests'),
                   subtitle: const Text('View and accept requests from students/parents'),
                   trailing: const Icon(Icons.chevron_right_rounded),

@@ -49,6 +49,6 @@ double calculateAttendancePercentage(List<AttendanceRecord> records) {
 
 final studentAttendancePercentageProvider =
     Provider.family<double, String>((ref, studentId) {
-  final records = ref.watch(studentAttendanceStreamProvider(studentId)).value ?? [];
+  final records = ref.watch(studentAttendanceStreamProvider(studentId)).valueOrNull ?? [];
   return calculateAttendancePercentage(records);
 });

@@ -22,9 +22,9 @@ class AppTheme {
       fontFamily: AppTypography.bodyFontFamily,
       scaffoldBackgroundColor: AppColors.backgroundLight,
       colorScheme: const ColorScheme.light(
-        primary: AppColors.primaryTeal,
+        primary: AppColors.primary,
         onPrimary: Colors.white,
-        secondary: AppColors.accentTeal,
+        secondary: AppColors.secondary,
         onSecondary: AppColors.ink,
         surface: AppColors.surfaceLight,
         onSurface: AppColors.ink,
@@ -55,7 +55,7 @@ class AppTheme {
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.3,
-              color: AppColors.primaryTeal,
+              color: AppColors.primary,
             );
           }
           return textTheme.labelSmall?.copyWith(
@@ -90,7 +90,7 @@ class AppTheme {
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadii.inputBorderRadius,
           borderSide: const BorderSide(
-            color: AppColors.primaryTeal,
+            color: AppColors.primary,
             width: 1.5,
           ),
         ),
@@ -105,7 +105,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryTeal,
+          backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(
@@ -151,9 +151,9 @@ class AppTheme {
       fontFamily: AppTypography.bodyFontFamily,
       scaffoldBackgroundColor: AppColors.backgroundDark,
       colorScheme: const ColorScheme.dark(
-        primary: AppColors.primaryTealLight,
+        primary: AppColors.primaryLight,
         onPrimary: AppColors.backgroundDark,
-        secondary: AppColors.accentTeal,
+        secondary: AppColors.secondary,
         onSecondary: AppColors.ink,
         surface: AppColors.surfaceDark,
         onSurface: AppColors.darkInk,
@@ -184,7 +184,7 @@ class AppTheme {
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.3,
-              color: AppColors.primaryTealLight,
+              color: AppColors.primaryLight,
             );
           }
           return textTheme.labelSmall?.copyWith(
@@ -213,7 +213,7 @@ class AppTheme {
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadii.inputBorderRadius,
           borderSide: const BorderSide(
-            color: AppColors.primaryTealLight,
+            color: AppColors.primaryLight,
             width: 1.5,
           ),
         ),
@@ -230,7 +230,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryTealLight,
+          backgroundColor: AppColors.primaryLight,
           foregroundColor: AppColors.backgroundDark,
           elevation: 0,
           padding: const EdgeInsets.symmetric(

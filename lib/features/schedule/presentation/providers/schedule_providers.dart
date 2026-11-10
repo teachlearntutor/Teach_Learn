@@ -69,9 +69,9 @@ class DateRange {
 
 final expandedSessionsProvider =
     Provider.family<List<ClassSession>, DateRange>((ref, range) {
-  final classes = ref.watch(weeklyClassesStreamProvider).value ?? [];
-  final overrides = ref.watch(sessionOverridesStreamProvider).value ?? [];
-  final holidays = ref.watch(holidaysStreamProvider).value ?? [];
+  final classes = ref.watch(weeklyClassesStreamProvider).valueOrNull ?? [];
+  final overrides = ref.watch(sessionOverridesStreamProvider).valueOrNull ?? [];
+  final holidays = ref.watch(holidaysStreamProvider).valueOrNull ?? [];
 
   return expandClassesToSessions(
     classes: classes,

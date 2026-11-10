@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/error_utils.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
@@ -225,9 +226,11 @@ class _StudentMonthlyAttendanceCalendarState
         );
       },
       loading: () => const AppLoader.inline(),
-      error: (_, _) => const EmptyStateWidget(
+      error: (err, _) => EmptyStateWidget(
         title: 'Attendance Unavailable',
-        description: 'Unable to load monthly attendance.',
+        description: formatUserFriendlyError(err),
+        actionLabel: 'Retry',
+        onActionPressed: () => ref.invalidate(studentAttendanceStreamProvider(widget.studentId)),
       ),
     );
   }

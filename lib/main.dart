@@ -42,7 +42,7 @@ class TeachLearnApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeNotifierProvider);
 
     return MaterialApp(
-      title: 'TeachLearn',
+      title: 'Teach Learn',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/error_utils.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_text_field.dart';
@@ -198,8 +199,8 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
             error: (error, stackTrace) => Center(
               child: EmptyStateWidget(
                 icon: Icons.cloud_off_outlined,
-                title: 'Students are unavailable',
-                description: 'Try loading your student list again.',
+                title: 'Students Unavailable',
+                description: formatUserFriendlyError(error),
                 actionLabel: 'Retry',
                 onActionPressed: () => ref.invalidate(studentsStreamProvider),
               ),

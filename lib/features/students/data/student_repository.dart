@@ -57,6 +57,23 @@ class FirestoreStudentRepository implements StudentRepository {
 
   @override
   Future<void> deleteStudent(String uid, String studentId) async {
-    await _ref(uid).doc(studentId).delete();
+    final batch = _firestore.batch();
+
+    // 1. Delete student document
+    batch.delete(_ref(uid).doc(studentId));
+
+    // 2. Query and batch delete student's attendance records
+    final attendanceSnap = await _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('attendance')
+        .where('studentId', isEqualTo: studentId)
+        .get();
+
+    for (final doc in attendanceSnap.docs) {
+      batch.delete(doc.reference);
+    }
+
+    await batch.commit();
   }
 }

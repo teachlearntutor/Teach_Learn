@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/error_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_text_field.dart';
@@ -160,7 +161,7 @@ class _MarkAttendanceScreenState extends ConsumerState<MarkAttendanceScreen> {
             );
           }
 
-          final existingRecords = attendanceState.value ?? [];
+          final existingRecords = attendanceState.valueOrNull ?? [];
           final sessionRecords = existingRecords.where((r) => r.sessionId == widget.session.id).toList();
 
           _initRecords(enrolled, sessionRecords);
@@ -338,7 +339,15 @@ class _MarkAttendanceScreenState extends ConsumerState<MarkAttendanceScreen> {
           );
         },
         loading: () => const AppLoader.inline(),
-        error: (err, _) => Center(child: Text('Error: $err')),
+        error: (err, _) => Center(
+          child: EmptyStateWidget(
+            icon: Icons.shield_outlined,
+            title: 'Attendance Unavailable',
+            description: formatUserFriendlyError(err),
+            actionLabel: 'Retry',
+            onActionPressed: () => ref.invalidate(studentsProvider),
+          ),
+        ),
       ),
     );
   }
