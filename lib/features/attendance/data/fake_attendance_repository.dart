@@ -15,49 +15,34 @@ class FakeAttendanceRepository implements AttendanceRepository {
   }
 
   @override
-  Stream<List<AttendanceRecord>> watchAttendance(String uid) {
-    scheduleMicrotask(_emit);
-    return _controller.stream;
-  }
-
-  @override
-  Stream<List<AttendanceRecord>> watchStudentAttendance(String uid, String studentId) {
+  Stream<List<AttendanceRecord>> watchAttendanceForDate(String uid, String date) {
     scheduleMicrotask(() {
-      final filtered = _records.where((r) => r.studentId == studentId).toList();
+      final filtered = _records.where((r) => r.date == date).toList();
       _controller.add(List.unmodifiable(filtered));
     });
     return _controller.stream;
   }
 
   @override
-  Future<void> markSessionAttendanceBatch({
-    required String uid,
-    required String sessionId,
-    required List<AttendanceRecord> records,
-  }) async {
-    for (final record in records) {
-      final docId = '${sessionId}_${record.studentId}';
-      final index = _records.indexWhere((r) => r.id == docId);
-      final updated = record.copyWith(id: docId);
-      if (index != -1) {
-        _records[index] = updated;
-      } else {
-        _records.add(updated);
-      }
-    }
-    _emit();
+  Stream<List<AttendanceRecord>> watchAllAttendance(String uid) {
+    scheduleMicrotask(() {
+      _controller.add(List.unmodifiable(_records));
+    });
+    return _controller.stream;
   }
 
   @override
-  Future<void> updateAttendanceRecord(String uid, AttendanceRecord record) async {
-    final docId = record.id.isNotEmpty
-        ? record.id
-        : '${record.sessionId}_${record.studentId}';
-    final index = _records.indexWhere((r) => r.id == docId);
-    if (index != -1) {
-      _records[index] = record.copyWith(id: docId);
-    } else {
-      _records.add(record.copyWith(id: docId));
+  Future<void> saveAttendanceBatch(String uid, String date, List<AttendanceRecord> records) async {
+    for (final r in records) {
+      final docId = '${r.studentId}_$date';
+      final idx = _records.indexWhere((existing) => existing.id == docId);
+      final recordWithId = r.copyWith(id: docId, date: date);
+
+      if (idx != -1) {
+        _records[idx] = recordWithId;
+      } else {
+        _records.add(recordWithId);
+      }
     }
     _emit();
   }

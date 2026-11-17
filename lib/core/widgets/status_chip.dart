@@ -64,6 +64,7 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
 
     Color bg;
     Color fg;
@@ -74,7 +75,7 @@ class StatusChip extends StatelessWidget {
       case StatusType.active:
       case StatusType.accepted:
         bg = isDark ? AppColors.darkSuccessSurface : AppColors.successSurface;
-        fg = AppColors.success;
+        fg = isDark ? AppColors.darkSuccessText : AppColors.success;
         break;
 
       case StatusType.unpaid:
@@ -82,7 +83,7 @@ class StatusChip extends StatelessWidget {
       case StatusType.left:
       case StatusType.declined:
         bg = isDark ? AppColors.darkDangerSurface : AppColors.dangerSurface;
-        fg = AppColors.danger;
+        fg = isDark ? AppColors.darkDangerText : colors.error;
         break;
 
       case StatusType.partial:
@@ -90,7 +91,7 @@ class StatusChip extends StatelessWidget {
       case StatusType.paused:
       case StatusType.pending:
         bg = isDark ? AppColors.darkWarningSurface : AppColors.warningSurface;
-        fg = AppColors.warning;
+        fg = isDark ? AppColors.darkWarningText : AppColors.warning;
         break;
     }
 

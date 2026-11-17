@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
+import 'core/widgets/app_snackbar.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/onboarding/presentation/screens/splash_screen.dart';
 import 'firebase_options.dart';
@@ -14,9 +15,8 @@ import 'firebase_options.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await AuthRepository.initializeGoogleSignIn();
 
-  // Enable Crashlytics handlers (no personal data in logs or custom keys)
+  // Configure Crashlytics handlers before runApp
   FlutterError.onError = (errorDetails) {
     FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
   };
@@ -26,10 +26,13 @@ Future<void> main() async {
     return true;
   };
 
-  // Enable Firestore offline persistence
+  // Enable Firestore offline persistence before any Firestore calls or runApp
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
+
+  // Google Sign-In SDK initialization
+  await AuthRepository.initializeGoogleSignIn();
 
   runApp(const ProviderScope(child: TeachLearnApp()));
 }
@@ -44,6 +47,7 @@ class TeachLearnApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Teach Learn',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [AppToastNavigatorObserver()],
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,

@@ -1,13 +1,16 @@
 import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/class_level_picker.dart';
 import '../../../../core/utils/contact_utils.dart';
+import '../../../../core/utils/error_utils.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/subject_picker.dart';
+import '../../../../core/widgets/app_snackbar.dart';
 import '../../domain/models/student.dart';
 import '../providers/student_providers.dart';
 
@@ -27,6 +30,8 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
   late final TextEditingController _schoolController;
   late final TextEditingController _subjectsController;
   late final TextEditingController _contactController;
+  late final TextEditingController _notesController;
+  final Set<String> _selectedSubjects = {};
   late StudentStatus _status;
   bool _isSaving = false;
 
@@ -40,9 +45,16 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
     _subjectsController = TextEditingController(
       text: student?.subjects.join(', ') ?? '',
     );
+    _selectedSubjects.addAll(
+      _subjectsController.text
+          .split(',')
+          .map((subject) => subject.trim())
+          .where((subject) => subject.isNotEmpty),
+    );
     _contactController = TextEditingController(
       text: student?.parentContact ?? '',
     );
+    _notesController = TextEditingController(text: student?.notes ?? '');
     _status = student?.status ?? StudentStatus.active;
   }
 
@@ -53,6 +65,7 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
     _schoolController.dispose();
     _subjectsController.dispose();
     _contactController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -70,13 +83,19 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
       // Check for duplicates when adding a new student
       if (existing == null) {
         final existingStudents = ref.read(studentsProvider).valueOrNull ?? [];
-        final normalizedContact = normalizePakistaniPhoneNumber(_contactController.text.trim());
+        final normalizedContact = normalizePakistaniPhoneNumber(
+          _contactController.text.trim(),
+        );
 
-        final isDuplicateName = existingStudents.any((s) => s.name.trim().toLowerCase() == nameStr.toLowerCase());
-        final isDuplicateContact = normalizedContact.isNotEmpty && existingStudents.any((s) {
-          final c = normalizePakistaniPhoneNumber(s.parentContact ?? '');
-          return c.isNotEmpty && c == normalizedContact;
-        });
+        final isDuplicateName = existingStudents.any(
+          (s) => s.name.trim().toLowerCase() == nameStr.toLowerCase(),
+        );
+        final isDuplicateContact =
+            normalizedContact.isNotEmpty &&
+            existingStudents.any((s) {
+              final c = normalizePakistaniPhoneNumber(s.parentContact ?? '');
+              return c.isNotEmpty && c == normalizedContact;
+            });
 
         if (isDuplicateName || isDuplicateContact) {
           final confirm = await showDialog<bool>(
@@ -110,9 +129,12 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
 
       // Extract numeric sort digit from class string (e.g. "Class 9" -> 9)
       final classDigitMatch = RegExp(r'\d+').firstMatch(classStr);
-      final classSort = classDigitMatch != null ? int.parse(classDigitMatch.group(0)!) : 9;
+      final classSort = classDigitMatch != null
+          ? int.parse(classDigitMatch.group(0)!)
+          : 9;
 
-      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final todayStr =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
       final student = Student(
         id: existing?.id ?? '',
@@ -128,37 +150,43 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
             .where((subject) => subject.isNotEmpty)
             .toList(),
         parentContact: _contactController.text.trim(),
-        startDate: existing?.startDate.isNotEmpty == true ? existing!.startDate : todayStr,
+        startDate: existing?.startDate.isNotEmpty == true
+            ? existing!.startDate
+            : todayStr,
         status: _status,
+        notes: _notesController.text.trim().isNotEmpty
+            ? _notesController.text.trim()
+            : null,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       );
 
-      final user = FirebaseAuth.instance.currentUser;
-      final uid = user?.uid ?? '';
-      final repo = ref.read(studentRepositoryProvider);
+      final notifier = ref.read(studentsNotifierProvider.notifier);
 
       if (existing == null) {
-        await repo.addStudent(uid, student);
+        await notifier.addStudent(student);
       } else {
-        await repo.updateStudent(uid, student);
+        await notifier.updateStudent(student);
       }
 
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(existing == null ? 'Student added successfully!' : 'Student profile updated!'),
-          backgroundColor: AppColors.success,
-        ),
+      showAppSnackBar(
+        context,
+        existing == null
+            ? 'Student added successfully!'
+            : 'Student profile updated!',
+        isSuccess: true,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: AppColors.danger,
-        ),
+      final uid = ref.read(studentsNotifierProvider.notifier).uid;
+      final details = formatFirestoreErrorDetails(e, 'users/$uid/students');
+      showAppSnackBar(
+        context,
+        formatUserFriendlyError(e),
+        isError: true,
+        diagnostic: details,
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -168,12 +196,35 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
   String _generateStudentCode() {
     final rand = math.Random.secure();
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-    final code = List.generate(4, (_) => chars[rand.nextInt(chars.length)]).join();
+    final code = List.generate(
+      4,
+      (_) => chars[rand.nextInt(chars.length)],
+    ).join();
     return 'S-$code';
   }
 
   String? _required(String? value) =>
       value == null || value.trim().isEmpty ? 'This field is required' : null;
+
+  String? _validateName(String? value) {
+    final name = value?.trim() ?? '';
+    if (name.isEmpty) return 'This field is required';
+    if (name.length > 80) return 'Name must be 80 characters or fewer';
+    return null;
+  }
+
+  String? _validateSubjects(String? value) {
+    final count = (value ?? '')
+        .split(',')
+        .map((subject) => subject.trim())
+        .where((subject) => subject.isNotEmpty)
+        .length;
+    if (count > 10) return 'Enter no more than 10 subjects';
+    return null;
+  }
+
+  String? _validateClass(String? value) =>
+      value == null || value.trim().isEmpty ? 'Class is required' : null;
 
   String? _validateContact(String? value) {
     if (value == null || value.trim().isEmpty) return null;
@@ -201,15 +252,44 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
                 controller: _nameController,
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.next,
-                validator: _required,
+                validator: _validateName,
               ),
               const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                label: 'Class level',
-                hint: 'For example, Class 9',
-                controller: _classController,
-                textInputAction: TextInputAction.next,
-                validator: _required,
+              FormField<Set<String>>(
+                initialValue: _classController.text.trim().isEmpty
+                    ? <String>{}
+                    : {_classController.text.trim()},
+                validator: (levels) => _validateClass(
+                  levels == null || levels.isEmpty ? '' : levels.first,
+                ),
+                builder: (field) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Class level',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    ClassLevelPicker(
+                      singleSelection: true,
+                      selectedLevels: field.value ?? <String>{},
+                      onChanged: (levels) {
+                        setState(() {
+                          _classController.text = levels.isEmpty
+                              ? ''
+                              : levels.first;
+                        });
+                        field.didChange(levels);
+                      },
+                    ),
+                    if (field.errorText != null)
+                      Text(
+                        field.errorText!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(
@@ -221,13 +301,38 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
                 validator: _required,
               ),
               const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                label: 'Subjects',
-                hint: 'Separate subjects with commas',
-                controller: _subjectsController,
-                textCapitalization: TextCapitalization.words,
-                textInputAction: TextInputAction.next,
-                validator: _required,
+              FormField<Set<String>>(
+                initialValue: _selectedSubjects,
+                validator: (subjects) =>
+                    _validateSubjects(subjects?.join(', ')),
+                builder: (field) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Subjects',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    SubjectPicker(
+                      selectedSubjects: _selectedSubjects,
+                      onChanged: (subjects) {
+                        setState(() {
+                          _selectedSubjects
+                            ..clear()
+                            ..addAll(subjects);
+                          _subjectsController.text = subjects.join(', ');
+                        });
+                        field.didChange(subjects);
+                      },
+                    ),
+                    if (field.errorText != null)
+                      Text(
+                        field.errorText!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(
@@ -237,6 +342,12 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
                 validator: _validateContact,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                label: 'Private Notes (Optional)',
+                hint: 'e.g. Needs extra focus on Organic Chemistry',
+                controller: _notesController,
               ),
               const SizedBox(height: AppSpacing.lg),
               Text('Status', style: Theme.of(context).textTheme.titleSmall),
@@ -261,8 +372,8 @@ class _StudentFormScreenState extends ConsumerState<StudentFormScreen> {
                 label: _isSaving
                     ? 'Saving...'
                     : isEditing
-                        ? 'Save changes'
-                        : 'Add student',
+                    ? 'Save changes'
+                    : 'Add student',
                 isLoading: _isSaving,
                 isFullWidth: true,
                 onPressed: _isSaving ? null : _save,

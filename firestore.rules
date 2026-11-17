@@ -16,8 +16,8 @@ service cloud.firestore {
 
     function isTutorUser() {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tutor';
+      && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tutor';
     }
 
     function validStudent(d) {
@@ -64,6 +64,11 @@ service cloud.firestore {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
         && validStudent(request.resource.data);
+
+        // Academic test records
+        match /tests/{testId} {
+          allow read, write: if isOwner(userId);
+        }
       }
 
       // Explicit rules for all user subcollections
@@ -77,8 +82,8 @@ service cloud.firestore {
     match /tutorProfiles/{tutorUid} {
       allow read: if isSignedIn() && (resource == null || resource.data.isPublished == true || request.auth.uid == tutorUid);
       allow create, update: if isOwner(tutorUid)
-        && isTutorUser()
-        && validTutorProfile(request.resource.data);
+      && isTutorUser()
+      && validTutorProfile(request.resource.data);
       allow delete: if isOwner(tutorUid);
 
       // Private contact subcollection (phone number)
@@ -101,27 +106,29 @@ service cloud.firestore {
       );
 
       allow create: if isSignedIn()
-        && request.resource.data.fromUid == request.auth.uid
-        && request.resource.data.status == 'pending'
-        && validLessonRequest(request.resource.data, requestId);
+      && request.resource.data.fromUid == request.auth.uid
+      && request.resource.data.status == 'pending'
+      && validLessonRequest(request.resource.data, requestId)
+      && request.resource.data.toUid != request.auth.uid
+      && exists(/databases/$(database)/documents/tutorProfiles/$(request.resource.data.toUid));
 
       allow update: if isSignedIn() && validLessonRequest(request.resource.data, requestId) && (
         // Tutor accept/decline when pending
         (request.auth.uid == resource.data.toUid
-          && resource.data.status == 'pending'
-          && request.resource.data.status in ['accepted', 'declined']
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['accepted', 'declined']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
         ||
         // Learner cancel when pending or accepted (declined stays blocked)
         (request.auth.uid == resource.data.fromUid
-          && resource.data.status in ['pending', 'accepted']
-          && request.resource.data.status == 'cancelled'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        && resource.data.status in ['pending', 'accepted']
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
         ||
         // Learner re-request after cancel
         (request.auth.uid == resource.data.fromUid
-          && resource.data.status == 'cancelled'
-          && request.resource.data.status == 'pending')
+        && resource.data.status == 'cancelled'
+        && request.resource.data.status == 'pending')
       );
 
       allow delete: if false;

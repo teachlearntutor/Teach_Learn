@@ -8,6 +8,7 @@ class EmptyStateWidget extends StatelessWidget {
   final String title;
   final String description;
   final IconData icon;
+  final String? diagnostic;
   final String? actionLabel;
   final VoidCallback? onActionPressed;
 
@@ -16,6 +17,7 @@ class EmptyStateWidget extends StatelessWidget {
     required this.title,
     required this.description,
     this.icon = Icons.inbox_outlined,
+    this.diagnostic,
     this.actionLabel,
     this.onActionPressed,
   });
@@ -25,30 +27,46 @@ class EmptyStateWidget extends StatelessWidget {
     return Center(
       child: AppCard(
         padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            if (actionLabel != null && onActionPressed != null) ...[
-              const SizedBox(height: AppSpacing.lg),
-              AppButton.primary(
-                label: actionLabel!,
-                onPressed: onActionPressed,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 32,
+                color: Theme.of(context).colorScheme.primary,
               ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                description,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (diagnostic != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  diagnostic!,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              if (actionLabel != null && onActionPressed != null) ...[
+                const SizedBox(height: AppSpacing.lg),
+                AppButton.primary(
+                  label: actionLabel!,
+                  onPressed: onActionPressed,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

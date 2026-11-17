@@ -2,8 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
-
 /// TeachLearn's elegant arc spinner & skeleton shimmer loader.
 class AppLoader extends StatefulWidget {
   final double size;
@@ -63,11 +61,7 @@ class _AppLoaderState extends State<AppLoader>
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
-    final strokeColor =
-        widget.color ??
-        (Theme.of(context).brightness == Brightness.dark
-            ? AppColors.primaryLight
-            : AppColors.primary);
+    final strokeColor = widget.color ?? Theme.of(context).colorScheme.primary;
 
     final loader = AnimatedBuilder(
       animation: _controller,
@@ -190,12 +184,10 @@ class _SkeletonShimmerState extends State<_SkeletonShimmer>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
-    final baseColor = isDark ? AppColors.surfaceDark : AppColors.borderLight;
-    final highlightColor = isDark
-        ? AppColors.darkInkMuted.withValues(alpha: 0.15)
-        : AppColors.surfaceLight;
+    final baseColor = colors.surfaceContainerHighest;
+    final highlightColor = colors.surfaceContainer;
 
     return AnimatedBuilder(
       animation: _controller,

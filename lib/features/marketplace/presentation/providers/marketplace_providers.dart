@@ -10,23 +10,32 @@ final marketplaceRepositoryProvider = Provider<MarketplaceRepository>((ref) {
 });
 
 final currentTutorProfileProvider = StreamProvider<TutorProfile?>((ref) {
-  try {
-    final user = ref.watch(authRepositoryProvider).currentUser;
-    final uid = user?.uid ?? '';
-    if (uid.isEmpty) return Stream.value(null);
-    return ref.watch(marketplaceRepositoryProvider).watchTutorProfile(uid);
-  } catch (_) {
-    return Stream.value(null);
-  }
+  final user = ref.watch(currentAuthUserProvider);
+  final uid = user?.uid ?? '';
+  if (uid.isEmpty) return Stream.value(null);
+  return ref.watch(marketplaceRepositoryProvider).watchTutorProfile(uid);
 });
 
-final tutorPrivateContactStreamProvider = StreamProvider.family<String?, String>((ref, tutorUid) {
-  try {
-    return ref.watch(marketplaceRepositoryProvider).watchTutorPrivateContact(tutorUid);
-  } catch (_) {
-    return Stream.value(null);
-  }
+final tutorProfileByUidProvider = StreamProvider.family<TutorProfile?, String>((
+  ref,
+  uid,
+) {
+  ref.watch(currentAuthUserProvider);
+  if (uid.isEmpty) return Stream.value(null);
+  return ref.watch(marketplaceRepositoryProvider).watchTutorProfile(uid);
 });
+
+final tutorPrivateContactStreamProvider =
+    StreamProvider.family<String?, String>((ref, tutorUid) {
+      ref.watch(currentAuthUserProvider);
+      try {
+        return ref
+            .watch(marketplaceRepositoryProvider)
+            .watchTutorPrivateContact(tutorUid);
+      } catch (_) {
+        return Stream.value(null);
+      }
+    });
 
 class PublishedTutorsState {
   final List<TutorProfile> tutors;
@@ -34,6 +43,7 @@ class PublishedTutorsState {
   final bool isLoadingInitial;
   final bool isLoadingMore;
   final String? error;
+  final int totalFetched;
 
   const PublishedTutorsState({
     required this.tutors,
@@ -41,6 +51,7 @@ class PublishedTutorsState {
     required this.isLoadingInitial,
     required this.isLoadingMore,
     this.error,
+    this.totalFetched = 0,
   });
 
   PublishedTutorsState copyWith({
@@ -49,6 +60,7 @@ class PublishedTutorsState {
     bool? isLoadingInitial,
     bool? isLoadingMore,
     String? error,
+    int? totalFetched,
   }) {
     return PublishedTutorsState(
       tutors: tutors ?? this.tutors,
@@ -56,37 +68,45 @@ class PublishedTutorsState {
       isLoadingInitial: isLoadingInitial ?? this.isLoadingInitial,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: error,
+      totalFetched: totalFetched ?? this.totalFetched,
     );
   }
 }
 
 class PublishedTutorsNotifier extends StateNotifier<PublishedTutorsState> {
   final MarketplaceRepository _repository;
+  List<TutorProfile> _allTutors = [];
+  int _visibleCount = 0;
 
   PublishedTutorsNotifier(this._repository)
-      : super(const PublishedTutorsState(
+    : super(
+        const PublishedTutorsState(
           tutors: [],
           hasMore: true,
           isLoadingInitial: true,
           isLoadingMore: false,
-        )) {
+        ),
+      ) {
     loadInitial();
   }
 
   Future<void> loadInitial() async {
     state = state.copyWith(isLoadingInitial: true, error: null);
     try {
-      final page = await _repository.fetchPublishedTutorsPageProfiles(limit: 20);
+      _allTutors = await _repository.fetchPublishedTutors(limit: 100);
+      _visibleCount = _allTutors.length < 20 ? _allTutors.length : 20;
       state = PublishedTutorsState(
-        tutors: page,
-        hasMore: page.length >= 20,
+        tutors: _allTutors.take(_visibleCount).toList(),
+        hasMore: _visibleCount < _allTutors.length,
         isLoadingInitial: false,
         isLoadingMore: false,
+        totalFetched: _allTutors.length,
       );
     } catch (e) {
       state = state.copyWith(
         isLoadingInitial: false,
         error: e.toString(),
+        totalFetched: 0,
       );
     }
   }
@@ -95,29 +115,19 @@ class PublishedTutorsNotifier extends StateNotifier<PublishedTutorsState> {
     if (!state.hasMore || state.isLoadingMore || state.isLoadingInitial) return;
 
     state = state.copyWith(isLoadingMore: true);
-    try {
-      final lastUid = state.tutors.isNotEmpty ? state.tutors.last.uid : null;
-      final newPage = await _repository.fetchPublishedTutorsPageProfiles(
-        limit: 20,
-        startAfterUid: lastUid,
-      );
-
-      final combined = [...state.tutors, ...newPage];
-      state = state.copyWith(
-        tutors: combined,
-        hasMore: newPage.length >= 20,
-        isLoadingMore: false,
-      );
-    } catch (e) {
-      state = state.copyWith(isLoadingMore: false, error: e.toString());
-    }
+    _visibleCount = (_visibleCount + 20).clamp(0, _allTutors.length).toInt();
+    state = state.copyWith(
+      tutors: _allTutors.take(_visibleCount).toList(),
+      hasMore: _visibleCount < _allTutors.length,
+      isLoadingMore: false,
+    );
   }
 }
 
 final publishedTutorsNotifierProvider =
     StateNotifierProvider<PublishedTutorsNotifier, PublishedTutorsState>((ref) {
-  return PublishedTutorsNotifier(ref.watch(marketplaceRepositoryProvider));
-});
+      return PublishedTutorsNotifier(ref.watch(marketplaceRepositoryProvider));
+    });
 
 final publishedTutorsStreamProvider = StreamProvider<List<TutorProfile>>((ref) {
   try {
@@ -128,23 +138,17 @@ final publishedTutorsStreamProvider = StreamProvider<List<TutorProfile>>((ref) {
 });
 
 final tutorRequestsStreamProvider = StreamProvider<List<LessonRequest>>((ref) {
-  try {
-    final user = ref.watch(authRepositoryProvider).currentUser;
-    final uid = user?.uid ?? '';
-    if (uid.isEmpty) return Stream.value([]);
-    return ref.watch(marketplaceRepositoryProvider).watchTutorRequests(uid);
-  } catch (_) {
-    return Stream.value([]);
-  }
+  final user = ref.watch(currentAuthUserProvider);
+  final uid = user?.uid ?? '';
+  if (uid.isEmpty) return Stream.value([]);
+  return ref.watch(marketplaceRepositoryProvider).watchTutorRequests(uid);
 });
 
-final learnerRequestsStreamProvider = StreamProvider<List<LessonRequest>>((ref) {
-  try {
-    final user = ref.watch(authRepositoryProvider).currentUser;
-    final uid = user?.uid ?? '';
-    if (uid.isEmpty) return Stream.value([]);
-    return ref.watch(marketplaceRepositoryProvider).watchLearnerRequests(uid);
-  } catch (_) {
-    return Stream.value([]);
-  }
+final learnerRequestsStreamProvider = StreamProvider<List<LessonRequest>>((
+  ref,
+) {
+  final user = ref.watch(currentAuthUserProvider);
+  final uid = user?.uid ?? '';
+  if (uid.isEmpty) return Stream.value([]);
+  return ref.watch(marketplaceRepositoryProvider).watchLearnerRequests(uid);
 });

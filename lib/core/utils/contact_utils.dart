@@ -1,56 +1,91 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Normalizes Pakistani phone numbers to E.164 international format (+923xxxxxxxx)
-String normalizePakistaniPhoneNumber(String input) {
-  if (input.trim().isEmpty) return '';
+import '../widgets/app_snackbar.dart';
 
-  // Extract digits and leading plus sign
-  String digits = input.replaceAll(RegExp(r'[^\d+]'), '');
+/// Formats Pakistani local phone numbers (e.g. 0301-555-0101 or 0300 1234567) to standard E.164 international format +923xx.
+String normalizePakistaniPhoneNumber(String rawPhone) {
+  final cleanDigits = rawPhone.replaceAll(RegExp(r'\D'), '');
 
-  if (digits.startsWith('+92')) {
-    return digits;
-  } else if (digits.startsWith('92') && digits.length >= 12) {
-    return '+$digits';
-  } else if (digits.startsWith('03') && digits.length == 11) {
-    return '+92${digits.substring(1)}';
-  } else if (digits.startsWith('3') && digits.length == 10) {
-    return '+92$digits';
+  if (cleanDigits.isEmpty) return '';
+
+  if (cleanDigits.startsWith('923') && cleanDigits.length == 12) {
+    return '+$cleanDigits';
   }
 
-  return digits.startsWith('+') ? digits : '+$digits';
+  if (cleanDigits.startsWith('03') && cleanDigits.length == 11) {
+    return '+92${cleanDigits.substring(1)}';
+  }
+
+  if (cleanDigits.startsWith('3') && cleanDigits.length == 10) {
+    return '+92$cleanDigits';
+  }
+
+  if (rawPhone.startsWith('+')) {
+    return rawPhone;
+  }
+
+  return '+$cleanDigits';
 }
 
-/// Launches phone dialer for parent contact
+/// Launches native phone dialer with normalized contact number.
 Future<bool> makePhoneCall(String rawPhoneNumber) async {
-  final normalized = normalizePakistaniPhoneNumber(rawPhoneNumber);
-  if (normalized.isEmpty) return false;
+  final phone = normalizePakistaniPhoneNumber(rawPhoneNumber);
+  if (phone.isEmpty) return false;
 
-  final Uri uri = Uri(scheme: 'tel', path: normalized);
+  final uri = Uri.parse('tel:$phone');
   if (await canLaunchUrl(uri)) {
     return await launchUrl(uri);
   }
   return false;
 }
 
-/// Launches WhatsApp with pre-filled English message template
+String buildTutorContactWhatsAppMessage(String tutorName) {
+  final name = tutorName.trim();
+  final greeting = name.isEmpty ? 'Hello' : 'Hello $name';
+  return '$greeting, I saw that you accepted my tuition request on Teach Learn. Please let me know the next steps.';
+}
+
+/// Launches a WhatsApp chat with the provided contact and message.
 Future<bool> launchWhatsAppContact({
   required String rawPhoneNumber,
-  required String studentName,
-  String? customMessage,
+  required String message,
 }) async {
-  final normalized = normalizePakistaniPhoneNumber(rawPhoneNumber);
-  if (normalized.isEmpty) return false;
+  final phone = normalizePakistaniPhoneNumber(rawPhoneNumber)
+      .replaceAll('+', '');
+  if (phone.isEmpty) return false;
 
-  final digitsOnly = normalized.replaceAll('+', '');
-  final message = customMessage ??
-      "Hello, this is TeachLearn regarding $studentName's tuition class. Please let me know if you have any questions.";
-
-  final Uri uri = Uri.parse(
-    'https://wa.me/$digitsOnly?text=${Uri.encodeComponent(message)}',
-  );
-
-  if (await canLaunchUrl(uri)) {
-    return await launchUrl(uri, mode: LaunchMode.externalApplication);
+  final encodedMessage = Uri.encodeComponent(message);
+  final whatsappUri = Uri.parse('https://wa.me/$phone?text=$encodedMessage');
+  if (await canLaunchUrl(whatsappUri)) {
+    return await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
   }
   return false;
+}
+
+/// Opens native email app with prefilled mailto and subject line, or copies email to clipboard if unavailable.
+Future<void> openEmailApp({
+  required String email,
+  required String subject,
+  required BuildContext context,
+}) async {
+  final uri = Uri.parse(
+    'mailto:$email?subject=${Uri.encodeComponent(subject)}',
+  );
+  try {
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+      return;
+    }
+  } catch (_) {}
+
+  Clipboard.setData(ClipboardData(text: email));
+  if (context.mounted) {
+    showAppSnackBar(
+      context,
+      'Email app unavailable. Copied support email "$email" to clipboard.',
+      isSuccess: true,
+    );
+  }
 }

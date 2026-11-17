@@ -9,6 +9,7 @@ import 'package:teach_learn/features/auth/presentation/providers/auth_providers.
 import 'package:teach_learn/features/students/data/fake_student_repository.dart';
 import 'package:teach_learn/features/students/domain/models/student.dart';
 import 'package:teach_learn/features/students/presentation/providers/student_providers.dart';
+import 'package:teach_learn/features/marketplace/presentation/providers/marketplace_providers.dart';
 import 'package:teach_learn/features/tutor/presentation/screens/tutor_home_screen.dart';
 import 'package:teach_learn/features/auth/presentation/screens/auth_screen.dart';
 import 'package:teach_learn/main.dart';
@@ -127,12 +128,29 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authRepositoryProvider.overrideWith(
+            (ref) => _UnauthenticatedAuthRepository(),
+          ),
           studentRepositoryProvider.overrideWith(
             (ref) => FakeStudentRepository(_sampleStudents),
           ),
           studentsStreamProvider.overrideWith(
             (ref) => Stream.value(_sampleStudents),
           ),
+          studentsNotifierProvider.overrideWith((ref) {
+            final notifier = StudentsNotifier(
+              ref.watch(studentRepositoryProvider),
+              'user_123',
+            );
+            notifier.state = StudentsState(
+              students: _sampleStudents,
+              hasMore: false,
+              isLoadingInitial: false,
+              isLoadingMore: false,
+            );
+            return notifier;
+          }),
+          tutorRequestsStreamProvider.overrideWith((ref) => Stream.value([])),
         ],
         child: MaterialApp(
           theme: AppTheme.lightTheme,
@@ -140,7 +158,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('Students'));
+    await tester.tap(find.text('Students').last);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -151,22 +169,39 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
 
-    expect(find.text('Parent contact'), findsOneWidget);
-    expect(find.textContaining('% attendance'), findsOneWidget);
+    expect(find.text('Parent Contact'), findsOneWidget);
+    expect(find.textContaining('% Attendance'), findsOneWidget);
   });
 
-  testWidgets('Tutor navigation has five tabs and no Fees tab', (
+  testWidgets('Tutor navigation has four tabs and no Fees tab', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authRepositoryProvider.overrideWith(
+            (ref) => _UnauthenticatedAuthRepository(),
+          ),
           studentRepositoryProvider.overrideWith(
             (ref) => FakeStudentRepository(_sampleStudents),
           ),
           studentsStreamProvider.overrideWith(
             (ref) => Stream.value(_sampleStudents),
           ),
+          studentsNotifierProvider.overrideWith((ref) {
+            final notifier = StudentsNotifier(
+              ref.watch(studentRepositoryProvider),
+              'user_123',
+            );
+            notifier.state = StudentsState(
+              students: _sampleStudents,
+              hasMore: false,
+              isLoadingInitial: false,
+              isLoadingMore: false,
+            );
+            return notifier;
+          }),
+          tutorRequestsStreamProvider.overrideWith((ref) => Stream.value([])),
         ],
         child: const MaterialApp(home: TutorHomeScreen()),
       ),
@@ -176,9 +211,15 @@ void main() {
 
     expect(find.text('Home'), findsAtLeastNWidgets(1));
     expect(find.text('Students'), findsAtLeastNWidgets(1));
-    expect(find.text('Schedule'), findsOneWidget);
-    expect(find.text('Attendance'), findsOneWidget);
-    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Attendance'), findsAtLeastNWidgets(1));
+    expect(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Profile'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Schedule'), findsNothing);
     expect(find.text('Fees'), findsNothing);
   });
 }

@@ -9,10 +9,7 @@ This document describes the Cloud Firestore data structures, subcollections, and
 ```
 /users/{uid}                           -> User Profile (Tutor / Student / Parent)
   ├── /students/{studentId}             -> Enrolled Students Subcollection
-  ├── /classes/{classId}                -> Weekly Recurring Classes Subcollection
-  ├── /sessions/{sessionId}             -> Individual Generated/Extra Sessions
-  ├── /holidays/{holidayId}             -> User Holidays Subcollection
-  └── /attendance/{sessionId_studentId} -> Attendance Records Subcollection
+  └── /attendance/{studentId_yyyy-MM-dd} -> Attendance Records Subcollection
 
 /tutorProfiles/{tutorUid}              -> Public Tutor Finder Profiles
 /lessonRequests/{fromUid_toUid}        -> Lesson Inquiry Requests
@@ -54,55 +51,17 @@ This document describes the Cloud Firestore data structures, subcollections, and
 
 ---
 
-### 3. Weekly Classes Subcollection (`/users/{uid}/classes/{classId}`)
-- `title` (string, optional): Class title.
-- `subject` (string): Subject name.
-- `classLevel` (string): Grade/Class level.
-- `studentIds` (array of strings, max 30): List of enrolled student IDs.
-- `weekdays` (array of numbers, 1..7): Days of week (1 = Monday, 7 = Sunday).
-- `startTime` (string): Start time in `HH:mm` format.
-- `durationMin` (number): Duration in minutes (15 to 300).
-- `timezone` (string): Timezone string (default `Asia/Karachi`).
-- `startDate` (string): Effective start date (`yyyy-MM-dd`).
-- `endDate` (string, optional): Effective end date.
-- `location` (map): `{ type: "home" | "online", place: string, link: string }`.
-- `active` (boolean): Whether recurring class is active.
-- `createdAt` (timestamp): Creation timestamp.
-- `updatedAt` (timestamp): Last update timestamp.
-
----
-
-### 4. Sessions Subcollection (`/users/{uid}/sessions/{sessionId}`)
-- `classId` (string, optional): Parent weekly class ID.
-- `kind` (string): Session type (`regular`, `extra`, `makeup`).
-- `date` (string): Session date (`yyyy-MM-dd`).
-- `startAt` (timestamp): Session start DateTime.
-- `endAt` (timestamp): Session end DateTime.
-- `status` (string): Session status (`scheduled`, `completed`, `cancelled`, `rescheduled`).
-- `cancelReason` (string, optional): Reason if cancelled.
-- `rescheduledFrom` (string, optional): Original session ID if rescheduled.
-- `subject` (string): Subject name.
-- `studentIds` (array of strings): List of student IDs.
-- `location` (map): Location details.
-- `attendanceMarked` (boolean): Flag indicating if roll call is saved.
-- `createdAt` (timestamp): Creation timestamp.
-- `updatedAt` (timestamp): Last update timestamp.
-
----
-
-### 5. Attendance Subcollection (`/users/{uid}/attendance/{sessionId}_{studentId}`)
-- `sessionId` (string): Associated class session ID.
-- `classId` (string, optional): Weekly class ID.
+### 3. Attendance Subcollection (`/users/{uid}/attendance/{studentId_yyyy-MM-dd}`)
 - `studentId` (string): Associated student ID.
 - `date` (string): Attendance date (`yyyy-MM-dd`).
-- `startAt` (timestamp): Session start DateTime.
-- `status` (string): Roll call status (`present`, `absent`, `late`).
-- `reason` (string, optional): Absence or late reason.
+- `studentName` (string): Student name at the time attendance was marked.
+- `status` (string): Roll call status (`present`, `absent`, `leave`).
+- `note` (string, optional): Attendance note.
 - `markedAt` (timestamp): Timestamp when roll call was saved.
 
 ---
 
-### 6. Public Tutor Profiles Collection (`/tutorProfiles/{tutorUid}`)
+### 4. Public Tutor Profiles Collection (`/tutorProfiles/{tutorUid}`)
 - `displayName` (string): Tutor display name.
 - `publicId` (string): Public ID code.
 - `headline` (string): Profile headline.
@@ -111,9 +70,8 @@ This document describes the Cloud Firestore data structures, subcollections, and
 - `levels` (array of strings): Classes/grades taught.
 - `city` (string): City location.
 - `area` (string): Area/sector location.
-- `mode` (string): Teaching mode (`home`, `online`, `both`).
+- `mode` (string): Teaching mode (`home` or `online`).
 - `experienceYears` (number): Years of experience.
-- `availableDays` (array of strings): Days available for tutoring.
 - `isPublished` (boolean): Visibility switch in Tutor Finder.
 - `createdAt` (timestamp): Creation timestamp.
 - `updatedAt` (timestamp): Last update timestamp.
@@ -124,8 +82,16 @@ This document describes the Cloud Firestore data structures, subcollections, and
 - `fromUid` (string): Student/Parent user UID.
 - `toUid` (string): Tutor user UID.
 - `fromName` (string): Student/Parent display name.
+- `learnerName` (string): Learner name shown to the tutor.
+- `classLevel` (string): Learner's class, when provided.
 - `subject` (string): Subject requested.
+- `subjects` (array of strings): Learner's requested subjects.
+- `city` (string): Learner's preferred city, when provided.
+- `area` (string): Learner's preferred area, when provided.
+- `mode` (string): Preferred teaching mode, when provided.
 - `message` (string): Message details.
 - `status` (string): Request status (`pending`, `accepted`, `declined`, `cancelled`).
 - `createdAt` (timestamp): Creation timestamp.
 - `updatedAt` (timestamp): Last update timestamp.
+
+Lesson requests do not store phone numbers or private contact details.

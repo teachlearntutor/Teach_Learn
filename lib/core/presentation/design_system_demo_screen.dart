@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
@@ -91,9 +90,9 @@ class _DesignSystemDemoScreenState extends State<DesignSystemDemoScreen> {
                             height: 48,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: AppColors.primaryTeal.withValues(
-                                alpha: 0.1,
-                              ),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer,
                               borderRadius: BorderRadius.circular(24),
                             ),
                             child: Text(
@@ -102,7 +101,7 @@ class _DesignSystemDemoScreenState extends State<DesignSystemDemoScreen> {
                                   ?.copyWith(
                                     color: Theme.of(context)
                                         .colorScheme
-                                        .primary,
+                                        .onPrimaryContainer,
                                   ),
                             ),
                           ),
@@ -125,9 +124,9 @@ class _DesignSystemDemoScreenState extends State<DesignSystemDemoScreen> {
                               ],
                             ),
                           ),
-                          const Icon(
+                          Icon(
                             Icons.verified_rounded,
-                            color: AppColors.primaryTeal,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ],
                       ),
@@ -138,20 +137,20 @@ class _DesignSystemDemoScreenState extends State<DesignSystemDemoScreen> {
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        'PKR 8,000 - 12,000 / month',
+                        'Class 9-10 · 3 subjects',
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                       const SizedBox(height: AppSpacing.md),
                       Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.star_rounded,
                             size: 18,
-                            color: AppColors.warning,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           const SizedBox(width: AppSpacing.xs),
                           Text(
-                            '4.9',
+                            'Verified tutor',
                             style: Theme.of(context).textTheme.labelLarge,
                           ),
                           const SizedBox(width: AppSpacing.sm),
@@ -247,7 +246,7 @@ class _DesignSystemDemoScreenState extends State<DesignSystemDemoScreen> {
                 const SizedBox(height: AppSpacing.md),
                 const EmptyStateWidget(
                   icon: Icons.event_available_outlined,
-                  title: 'No lessons scheduled',
+                  title: 'No lessons yet',
                   description: 'Your upcoming lessons will appear here.',
                   actionLabel: 'Explore tutors',
                   onActionPressed: _onExplorePressed,

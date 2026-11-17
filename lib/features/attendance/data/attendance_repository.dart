@@ -1,15 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../domain/models/attendance_record.dart';
 
 abstract class AttendanceRepository {
-  Stream<List<AttendanceRecord>> watchAttendance(String uid);
-  Stream<List<AttendanceRecord>> watchStudentAttendance(String uid, String studentId);
-  Future<void> markSessionAttendanceBatch({
-    required String uid,
-    required String sessionId,
-    required List<AttendanceRecord> records,
-  });
-  Future<void> updateAttendanceRecord(String uid, AttendanceRecord record);
+  Stream<List<AttendanceRecord>> watchAttendanceForDate(String uid, String date);
+  Stream<List<AttendanceRecord>> watchAllAttendance(String uid);
+  Future<void> saveAttendanceBatch(String uid, String date, List<AttendanceRecord> records);
 }
 
 class FirestoreAttendanceRepository implements AttendanceRepository {
@@ -23,20 +19,10 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
   }
 
   @override
-  Stream<List<AttendanceRecord>> watchAttendance(String uid) {
-    if (uid.isEmpty) return Stream.value([]);
-    return _ref(uid).snapshots().map((snapshot) {
-      return snapshot.docs
-          .map((doc) => AttendanceRecord.fromFirestore(doc))
-          .toList();
-    });
-  }
-
-  @override
-  Stream<List<AttendanceRecord>> watchStudentAttendance(String uid, String studentId) {
-    if (uid.isEmpty || studentId.isEmpty) return Stream.value([]);
+  Stream<List<AttendanceRecord>> watchAttendanceForDate(String uid, String date) {
+    if (uid.isEmpty || date.isEmpty) return Stream.value([]);
     return _ref(uid)
-        .where('studentId', isEqualTo: studentId)
+        .where('date', isEqualTo: date)
         .snapshots()
         .map((snapshot) {
       return snapshot.docs
@@ -46,45 +32,29 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
   }
 
   @override
-  Future<void> markSessionAttendanceBatch({
-    required String uid,
-    required String sessionId,
-    required List<AttendanceRecord> records,
-  }) async {
-    final batch = _firestore.batch();
-
-    // 1. Add/Update each attendance record document
-    for (final record in records) {
-      final docId = '${sessionId}_${record.studentId}';
-      final docRef = _ref(uid).doc(docId);
-      batch.set(docRef, record.copyWith(id: docId).toFirestore());
-    }
-
-    // 2. Update session attendanceMarked flag in sessions/{sessionId}
-    final sessionRef = _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('sessions')
-        .doc(sessionId);
-
-    batch.set(
-      sessionRef,
-      {
-        'attendanceMarked': true,
-        'markedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-
-    await batch.commit();
+  Stream<List<AttendanceRecord>> watchAllAttendance(String uid) {
+    if (uid.isEmpty) return Stream.value([]);
+    return _ref(uid).snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => AttendanceRecord.fromFirestore(doc))
+          .toList();
+    });
   }
 
   @override
-  Future<void> updateAttendanceRecord(String uid, AttendanceRecord record) async {
-    final docId = record.id.isNotEmpty
-        ? record.id
-        : '${record.sessionId}_${record.studentId}';
-    await _ref(uid).doc(docId).set(record.copyWith(id: docId).toFirestore());
+  Future<void> saveAttendanceBatch(String uid, String date, List<AttendanceRecord> records) async {
+    if (uid.isEmpty || records.isEmpty) return;
+
+    const chunkSize = 400;
+    for (var i = 0; i < records.length; i += chunkSize) {
+      final batch = _firestore.batch();
+      final chunk = records.sublist(i, (i + chunkSize).clamp(0, records.length));
+      for (final record in chunk) {
+        final docId = '${record.studentId}_$date';
+        final docRef = _ref(uid).doc(docId);
+        batch.set(docRef, record.copyWith(id: docId, date: date).toFirestore(), SetOptions(merge: true));
+      }
+      await batch.commit();
+    }
   }
 }

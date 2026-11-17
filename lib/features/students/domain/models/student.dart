@@ -47,14 +47,30 @@ class Student {
   String get schoolName => school ?? '';
 
   Map<String, dynamic> toFirestore() {
+    final normalizedName = name.trim();
+    final normalizedSubjects = subjects
+        .map((subject) => subject.trim())
+        .where((subject) => subject.isNotEmpty)
+        .toList();
+    if (normalizedName.isEmpty || normalizedName.length > 80) {
+      throw ArgumentError.value(name, 'name', 'Must be 1 to 80 characters.');
+    }
+    if (normalizedSubjects.length > 10) {
+      throw ArgumentError.value(
+        subjects,
+        'subjects',
+        'Must contain no more than 10 subjects.',
+      );
+    }
+
     return {
       'code': code,
-      'name': name,
-      'searchName': searchName,
-      'classLevel': classLevel,
+      'name': normalizedName,
+      'searchName': normalizedName.toLowerCase(),
+      'classLevel': classLevel.trim(),
       'classSort': classSort,
       'school': school,
-      'subjects': subjects,
+      'subjects': normalizedSubjects,
       'parentName': parentName,
       'parentContact': parentContact,
       'address': address,
@@ -80,7 +96,9 @@ class Student {
 
     return Student(
       id: doc.id,
-      code: data['code'] as String? ?? 'S-${doc.id.substring(0, 4).toUpperCase()}',
+      code:
+          data['code'] as String? ??
+          'S-${doc.id.substring(0, 4).toUpperCase()}',
       name: nameStr,
       searchName: data['searchName'] as String? ?? nameStr.toLowerCase(),
       classLevel: data['classLevel'] as String? ?? 'Class 9',

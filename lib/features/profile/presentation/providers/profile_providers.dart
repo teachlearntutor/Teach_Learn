@@ -1,21 +1,26 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../data/profile_cleanup_repository.dart';
+
 const String _kClassRemindersKey = 'pref_class_reminders';
 const String _kAttendanceAlertsKey = 'pref_attendance_alerts';
 const String _kLanguageKey = 'pref_app_language';
 
+final profileCleanupRepositoryProvider = Provider<ProfileCleanupRepository>(
+  (ref) => FirestoreProfileCleanupRepository(),
+);
+
 final notificationSettingsProvider =
-    StateNotifierProvider<NotificationSettingsNotifier, Map<String, bool>>((ref) {
-  return NotificationSettingsNotifier();
-});
+    StateNotifierProvider<NotificationSettingsNotifier, Map<String, bool>>((
+      ref,
+    ) {
+      return NotificationSettingsNotifier();
+    });
 
 class NotificationSettingsNotifier extends StateNotifier<Map<String, bool>> {
   NotificationSettingsNotifier()
-      : super({
-          'classReminders': true,
-          'attendanceAlerts': true,
-        }) {
+    : super({'classReminders': true, 'attendanceAlerts': true}) {
     _loadSettings();
   }
 
@@ -45,7 +50,9 @@ class NotificationSettingsNotifier extends StateNotifier<Map<String, bool>> {
   }
 }
 
-final appLanguageProvider = StateNotifierProvider<AppLanguageNotifier, String>((ref) {
+final appLanguageProvider = StateNotifierProvider<AppLanguageNotifier, String>((
+  ref,
+) {
   return AppLanguageNotifier();
 });
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import '../domain/models/lesson_request.dart';
 import '../domain/models/tutor_profile.dart';
 import 'marketplace_repository.dart';
@@ -34,7 +35,9 @@ class FakeMarketplaceRepository implements MarketplaceRepository {
 
   @override
   Stream<TutorProfile?> watchTutorProfile(String uid) {
-    scheduleMicrotask(() => _tutorController.add(List.unmodifiable(_profiles.values.toList())));
+    scheduleMicrotask(
+      () => _tutorController.add(List.unmodifiable(_profiles.values.toList())),
+    );
     return Stream.value(_profiles[uid]);
   }
 
@@ -50,29 +53,21 @@ class FakeMarketplaceRepository implements MarketplaceRepository {
   }
 
   @override
-  Future<void> saveTutorPrivateContact({required String uid, required String phone}) async {
+  Future<void> saveTutorPrivateContact({
+    required String uid,
+    required String phone,
+  }) async {
     _privateContacts[uid] = phone;
   }
 
   @override
-  Future<List<TutorProfile>> fetchPublishedTutorsPageProfiles({
-    int limit = 20,
-    String? startAfterUid,
-  }) async {
+  Future<List<TutorProfile>> fetchPublishedTutors({int limit = 100}) async {
     final published = _profiles.values.where((p) => p.isPublished).toList();
-    published.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    int startIndex = 0;
-    if (startAfterUid != null && startAfterUid.isNotEmpty) {
-      final index = published.indexWhere((p) => p.uid == startAfterUid);
-      if (index != -1) {
-        startIndex = index + 1;
-      }
-    }
-
-    if (startIndex >= published.length) return [];
-    final endIndex = (startIndex + limit).clamp(0, published.length);
-    return published.sublist(startIndex, endIndex);
+    published.sort((a, b) {
+      final createdAtOrder = b.createdAt.compareTo(a.createdAt);
+      return createdAtOrder != 0 ? createdAtOrder : a.uid.compareTo(b.uid);
+    });
+    return published.take(limit).toList();
   }
 
   @override
@@ -83,8 +78,13 @@ class FakeMarketplaceRepository implements MarketplaceRepository {
 
   @override
   Future<void> createLessonRequest(LessonRequest request) async {
-    final docId = request.id.isNotEmpty ? request.id : '${request.fromUid}_${request.toUid}';
-    final updated = request.copyWith(id: docId, status: LessonRequestStatus.pending);
+    final docId = request.id.isNotEmpty
+        ? request.id
+        : '${request.fromUid}_${request.toUid}';
+    final updated = request.copyWith(
+      id: docId,
+      status: LessonRequestStatus.pending,
+    );
     final index = _requests.indexWhere((r) => r.id == docId);
     if (index != -1) {
       _requests[index] = updated;
@@ -96,17 +96,28 @@ class FakeMarketplaceRepository implements MarketplaceRepository {
 
   @override
   Future<void> resendLessonRequestAfterCancel(LessonRequest request) async {
-    final docId = request.id.isNotEmpty ? request.id : '${request.fromUid}_${request.toUid}';
+    final docId = request.id.isNotEmpty
+        ? request.id
+        : '${request.fromUid}_${request.toUid}';
     final index = _requests.indexWhere((r) => r.id == docId);
     if (index != -1) {
       _requests[index] = _requests[index].copyWith(
+        learnerName: request.learnerName,
+        fromName: request.fromName,
+        classLevel: request.classLevel,
         subject: request.subject,
+        subjects: request.subjects,
+        city: request.city,
+        area: request.area,
+        mode: request.mode,
         message: request.message,
         status: LessonRequestStatus.pending,
         updatedAt: DateTime.now(),
       );
     } else {
-      _requests.add(request.copyWith(id: docId, status: LessonRequestStatus.pending));
+      _requests.add(
+        request.copyWith(id: docId, status: LessonRequestStatus.pending),
+      );
     }
     _emitRequests();
   }
@@ -136,7 +147,10 @@ class FakeMarketplaceRepository implements MarketplaceRepository {
   }) async {
     final index = _requests.indexWhere((r) => r.id == requestId);
     if (index != -1) {
-      _requests[index] = _requests[index].copyWith(status: status, updatedAt: DateTime.now());
+      _requests[index] = _requests[index].copyWith(
+        status: status,
+        updatedAt: DateTime.now(),
+      );
       _emitRequests();
     }
   }

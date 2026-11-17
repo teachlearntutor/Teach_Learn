@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 
 class BrandMark extends StatelessWidget {
@@ -15,7 +14,10 @@ class BrandMark extends StatelessWidget {
       label: 'TeachLearn open-book mark',
       child: CustomPaint(
         size: Size.square(size),
-        painter: const _BrandMarkPainter(),
+        painter: _BrandMarkPainter(
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        ),
       ),
     );
   }
@@ -29,11 +31,7 @@ class BrandWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? AppColors.darkInk : AppColors.ink;
-    final brandColor = isDark
-        ? AppColors.primaryLight
-        : AppColors.primary;
+    final colors = Theme.of(context).colorScheme;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -53,11 +51,11 @@ class BrandWordmark extends StatelessWidget {
             children: [
               TextSpan(
                 text: 'Teach',
-                style: TextStyle(color: textColor),
+                style: TextStyle(color: colors.onSurface),
               ),
               TextSpan(
                 text: 'Learn',
-                style: TextStyle(color: brandColor),
+                style: TextStyle(color: colors.primary),
               ),
             ],
           ),
@@ -75,7 +73,13 @@ class BrandWordmark extends StatelessWidget {
 }
 
 class _BrandMarkPainter extends CustomPainter {
-  const _BrandMarkPainter();
+  const _BrandMarkPainter({
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  final Color backgroundColor;
+  final Color foregroundColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -84,10 +88,10 @@ class _BrandMarkPainter extends CustomPainter {
 
     canvas.drawRRect(
       RRect.fromLTRBR(0, 0, 64, 64, const Radius.circular(12)),
-      Paint()..color = AppColors.primary,
+      Paint()..color = backgroundColor,
     );
 
-    final pages = Paint()..color = Colors.white;
+    final pages = Paint()..color = foregroundColor;
     final leftPage = Path()
       ..moveTo(10, 27)
       ..cubicTo(19, 26, 26, 28, 31, 33)
@@ -109,24 +113,26 @@ class _BrandMarkPainter extends CustomPainter {
       ..lineTo(32, 28)
       ..lineTo(12, 19)
       ..close();
-    canvas.drawPath(cap, Paint()..color = AppColors.secondary);
+    canvas.drawPath(cap, Paint()..color = foregroundColor);
 
     canvas.drawLine(
       const Offset(49, 20),
       const Offset(49, 28),
       Paint()
-        ..color = AppColors.secondary
+        ..color = foregroundColor
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round,
     );
     canvas.drawCircle(
       const Offset(49, 30),
       2,
-      Paint()..color = AppColors.secondary,
+      Paint()..color = foregroundColor,
     );
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant _BrandMarkPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _BrandMarkPainter oldDelegate) =>
+      backgroundColor != oldDelegate.backgroundColor ||
+      foregroundColor != oldDelegate.foregroundColor;
 }

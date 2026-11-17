@@ -18,7 +18,9 @@ class AppTextField extends StatelessWidget {
   final Widget? prefixIcon;
   final Widget? suffixIcon;
   final int maxLines;
+  final int? maxLength;
   final bool enabled;
+  final bool showLabel;
 
   const AppTextField({
     super.key,
@@ -36,7 +38,9 @@ class AppTextField extends StatelessWidget {
     this.prefixIcon,
     this.suffixIcon,
     this.maxLines = 1,
+    this.maxLength,
     this.enabled = true,
+    this.showLabel = true,
   });
 
   @override
@@ -44,8 +48,10 @@ class AppTextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: AppSpacing.sm),
+        if (showLabel) ...[
+          Text(label, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         TextFormField(
           controller: controller,
           onChanged: onChanged,
@@ -56,6 +62,7 @@ class AppTextField extends StatelessWidget {
           textInputAction: textInputAction,
           autofillHints: autofillHints,
           maxLines: maxLines,
+          maxLength: maxLength,
           enabled: enabled,
           style: Theme.of(context).textTheme.bodyMedium,
           decoration: InputDecoration(

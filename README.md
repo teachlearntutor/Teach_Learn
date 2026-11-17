@@ -2,16 +2,15 @@
 
 **Teach. Learn. Track.**
 
-TeachLearn is an Android app (Flutter + Firebase) for home tutors. Tutors manage their students, class schedule and attendance in one place, and students or parents can find tutors and send lesson requests.
+Teach Learn is an Android app (Flutter + Firebase) centered on helping students and parents find a home tutor. Tutors can also manage their students and attendance.
 
 > Status: **in active development.** Not yet published on any store.
 
 ## Features
 
 ### For tutors
-- Student management: add, edit, search, group by class, pause or archive
-- Weekly class schedule with holidays, one-off changes and time-clash warnings
-- Attendance marking (present / absent / late / excused) and per-student attendance percentage
+- Student management: add, edit, search, group by class, pause or archive, paged lists (50 per page)
+- Attendance marking (present / absent / leave) and per-student attendance percentage
 - Public tutor profile (headline, bio, subjects, class levels, city, area, mode, experience, availability)
 - Lesson request inbox: accept or decline, then add the student in one tap
 - Call and WhatsApp shortcuts for student contacts
@@ -35,7 +34,7 @@ TeachLearn is an Android app (Flutter + Firebase) for home tutors. Tutors manage
 | State management | Riverpod |
 | Backend | Firebase Authentication, Cloud Firestore, Crashlytics (Spark plan) |
 | Local storage | shared_preferences |
-| Other | google_sign_in, url_launcher, image_picker, Lucide icons |
+| Other | google_sign_in, url_launcher, Lucide icons |
 
 No Firebase Storage, Cloud Functions or paid services are used.
 
@@ -50,7 +49,6 @@ lib/
     tutor/         tutor home and dashboard
     learner/       student / parent home
     students/      student CRUD
-    schedule/      classes, sessions, holidays
     attendance/    attendance marking and stats
     profile/       profile, settings
     marketplace/   tutor finder, public profile, lesson requests
@@ -63,7 +61,7 @@ firestore.rules         security rules
 
 ```
 users/{uid}                 profile, role, publicId
-  students/ classes/ sessions/ holidays/ attendance/
+  students/ attendance/
 publicIds/{id}              reserved public IDs
 tutorProfiles/{uid}         public tutor profile
   private/contact           phone, readable only after a request is accepted

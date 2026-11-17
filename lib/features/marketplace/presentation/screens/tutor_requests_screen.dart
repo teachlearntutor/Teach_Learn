@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/error_utils.dart';
+import '../../../../core/utils/name_initials.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_snackbar.dart';
+import '../../../../core/widgets/app_staggered_item.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/status_chip.dart';
 import '../../../students/domain/models/student.dart';
@@ -16,7 +20,8 @@ class TutorRequestsScreen extends ConsumerStatefulWidget {
   const TutorRequestsScreen({super.key});
 
   @override
-  ConsumerState<TutorRequestsScreen> createState() => _TutorRequestsScreenState();
+  ConsumerState<TutorRequestsScreen> createState() =>
+      _TutorRequestsScreenState();
 }
 
 class _TutorRequestsScreenState extends ConsumerState<TutorRequestsScreen>
@@ -43,10 +48,7 @@ class _TutorRequestsScreenState extends ConsumerState<TutorRequestsScreen>
   ) async {
     try {
       final repo = ref.read(marketplaceRepositoryProvider);
-      await repo.updateRequestStatus(
-        requestId: request.id,
-        status: newStatus,
-      );
+      await repo.updateRequestStatus(requestId: request.id, status: newStatus);
 
       if (!context.mounted) return;
 
@@ -55,7 +57,9 @@ class _TutorRequestsScreenState extends ConsumerState<TutorRequestsScreen>
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('Request Accepted!'),
-            content: Text('Would you like to add ${request.fromName} as a new student now?'),
+            content: Text(
+              'Would you like to add ${request.fromName} as a new student now?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
@@ -76,12 +80,19 @@ class _TutorRequestsScreenState extends ConsumerState<TutorRequestsScreen>
             code: '',
             name: request.fromName,
             searchName: request.fromName.toLowerCase(),
-            classLevel: 'Class 9',
-            classSort: 9,
+            classLevel: request.classLevel,
+            classSort:
+                int.tryParse(
+                  RegExp(r'\d+').firstMatch(request.classLevel)?.group(0) ?? '',
+                ) ??
+                0,
             school: '',
-            subjects: [request.subject],
+            subjects: request.subjects.isNotEmpty
+                ? request.subjects
+                : [request.subject],
             parentContact: '',
-            startDate: '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
+            startDate:
+                '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
             status: StudentStatus.active,
             createdAt: now,
             updatedAt: now,
@@ -95,14 +106,19 @@ class _TutorRequestsScreenState extends ConsumerState<TutorRequestsScreen>
           );
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lesson request declined.')),
-        );
+        showAppSnackBar(context, 'Lesson request declined.');
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.danger),
+      final details = formatFirestoreErrorDetails(
+        e,
+        'lessonRequests/${request.id}',
+      );
+      showAppSnackBar(
+        context,
+        formatUserFriendlyError(e),
+        isError: true,
+        diagnostic: details,
       );
     }
   }
@@ -125,9 +141,15 @@ class _TutorRequestsScreenState extends ConsumerState<TutorRequestsScreen>
       ),
       body: requestsState.when(
         data: (allRequests) {
-          final pending = allRequests.where((r) => r.status == LessonRequestStatus.pending).toList();
-          final accepted = allRequests.where((r) => r.status == LessonRequestStatus.accepted).toList();
-          final declined = allRequests.where((r) => r.status == LessonRequestStatus.declined).toList();
+          final pending = allRequests
+              .where((r) => r.status == LessonRequestStatus.pending)
+              .toList();
+          final accepted = allRequests
+              .where((r) => r.status == LessonRequestStatus.accepted)
+              .toList();
+          final declined = allRequests
+              .where((r) => r.status == LessonRequestStatus.declined)
+              .toList();
 
           return TabBarView(
             controller: _tabController,
@@ -138,8 +160,38 @@ class _TutorRequestsScreenState extends ConsumerState<TutorRequestsScreen>
             ],
           );
         },
-        loading: () => const AppLoader.inline(),
-        error: (err, _) => Center(child: Text('Error: $err')),
+        loading: () => ListView.separated(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(AppSpacing.md),
+          itemCount: 4,
+          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+          itemBuilder: (_, _) => AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppLoader.skeleton(width: 170, height: 16),
+                const SizedBox(height: AppSpacing.md),
+                AppLoader.skeleton(width: double.infinity, height: 12),
+              ],
+            ),
+          ),
+        ),
+        error: (err, _) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: 360,
+              child: EmptyStateWidget(
+                icon: Icons.shield_outlined,
+                title: 'Requests Unavailable',
+                description: formatUserFriendlyError(err),
+                actionLabel: 'Retry',
+                onActionPressed: () =>
+                    ref.invalidate(tutorRequestsStreamProvider),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -151,79 +203,180 @@ class _TutorRequestsScreenState extends ConsumerState<TutorRequestsScreen>
     bool isPendingTab = false,
   }) {
     if (requests.isEmpty) {
-      return const EmptyStateWidget(
-        icon: Icons.mail_outline_rounded,
-        title: 'No requests in this tab',
-        description: 'Lesson requests from students will appear here.',
+      return RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(tutorRequestsStreamProvider);
+          await ref.read(tutorRequestsStreamProvider.future);
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(
+              height: 360,
+              child: EmptyStateWidget(
+                icon: Icons.mail_outline_rounded,
+                title: 'No requests in this tab',
+                description: 'Lesson requests from students will appear here.',
+              ),
+            ),
+          ],
+        ),
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      itemCount: requests.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) {
-        final request = requests[index];
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(tutorRequestsStreamProvider);
+        await ref.read(tutorRequestsStreamProvider.future);
+      },
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        itemCount: requests.length,
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (context, index) {
+          final request = requests[index];
 
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          return AppStaggeredItem(
+            key: ValueKey(request.id),
+            index: index,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      request.fromName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .primary,
+                          child: Text(
+                            nameInitials(
+                              request.learnerName.isNotEmpty
+                                  ? request.learnerName
+                                  : request.fromName,
+                              fallback: 'L',
+                            ),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimary,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            request.learnerName.isNotEmpty
+                                ? request.learnerName
+                                : request.fromName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
                     ),
-                    StatusChip.present(label: request.status.name.toUpperCase()),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text('Subject: ${request.subject}', style: Theme.of(context).textTheme.bodySmall),
-                if (request.message.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text('"${request.message}"', style: Theme.of(context).textTheme.bodyMedium),
-                ],
-                if (isPendingTab) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AppButton.secondary(
-                          label: 'Decline',
-                          onPressed: () => _updateStatus(
-                            context,
-                            ref,
-                            request,
-                            LessonRequestStatus.declined,
-                          ),
-                        ),
+                    const SizedBox(height: AppSpacing.sm),
+                    StatusChip.present(
+                      label: request.status.name.toUpperCase(),
+                    ),
+                    if (request.classLevel.isNotEmpty)
+                      _RequestDetailLine(
+                        label: 'Class',
+                        value: request.classLevel,
                       ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: AppButton.primary(
-                          label: 'Accept',
-                          onPressed: () => _updateStatus(
-                            context,
-                            ref,
-                            request,
-                            LessonRequestStatus.accepted,
-                          ),
-                        ),
+                    finalRequestSubjects(request).isNotEmpty
+                        ? _RequestDetailLine(
+                            label: 'Subjects',
+                            value: finalRequestSubjects(request).join(', '),
+                          )
+                        : const SizedBox.shrink(),
+                    if (request.city.isNotEmpty || request.area.isNotEmpty)
+                      _RequestDetailLine(
+                        label: 'Location',
+                        value: [
+                          request.area,
+                          request.city,
+                        ].where((part) => part.isNotEmpty).join(', '),
+                      ),
+                    if (request.message.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        request.message,
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
-                  ),
-                ],
-              ],
+                    if (isPendingTab) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppButton.secondary(
+                              label: 'Decline',
+                              onPressed: () => _updateStatus(
+                                context,
+                                ref,
+                                request,
+                                LessonRequestStatus.declined,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: AppButton.primary(
+                              label: 'Accept',
+                              onPressed: () => _updateStatus(
+                                context,
+                                ref,
+                                request,
+                                LessonRequestStatus.accepted,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
+    );
+  }
+
+  List<String> finalRequestSubjects(LessonRequest request) {
+    if (request.subjects.isNotEmpty) return request.subjects;
+    return request.subject.isEmpty ? const [] : [request.subject];
+  }
+}
+
+class _RequestDetailLine extends StatelessWidget {
+  const _RequestDetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Text.rich(
+        TextSpan(
+          style: Theme.of(context).textTheme.bodySmall,
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
     );
   }
 }

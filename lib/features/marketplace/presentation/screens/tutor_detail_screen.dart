@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,10 +5,16 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radii.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/contact_utils.dart';
+import '../../../../core/utils/error_utils.dart';
+import '../../../../core/utils/name_initials.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_snackbar.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/contact_action_buttons.dart';
 import '../../../../core/widgets/status_chip.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../learner/domain/models/learner_preferences.dart';
 import '../../domain/models/lesson_request.dart';
 import '../../domain/models/tutor_profile.dart';
 import '../providers/marketplace_providers.dart';
@@ -24,9 +29,16 @@ class TutorDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
-  Future<void> _showSendRequestModal(bool isResend) async {
+  Future<void> _showSendRequestModal(
+    bool isResend,
+    LearnerPreferences learnerPrefs,
+    String learnerName,
+  ) async {
+    final pageContext = context;
     final subjectController = TextEditingController(
-      text: widget.tutor.subjects.isNotEmpty ? widget.tutor.subjects.first : 'Mathematics',
+      text: widget.tutor.subjects.isNotEmpty
+          ? widget.tutor.subjects.first
+          : 'Mathematics',
     );
     final messageController = TextEditingController();
     bool isSending = false;
@@ -49,9 +61,15 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(isResend ? 'Re-send Lesson Request' : 'Send Lesson Request', style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                isResend ? 'Re-send Lesson Request' : 'Send Lesson Request',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: AppSpacing.xs),
-              Text('To: ${widget.tutor.displayName}', style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                'To: ${widget.tutor.displayName}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               const SizedBox(height: AppSpacing.md),
 
               AppTextField(
@@ -62,33 +80,42 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
 
               AppTextField(
                 label: 'Message / Details',
-                hint: 'e.g., Looking for home tuition for Class 9 Mathematics in DHA Phase 5...',
+                hint: 'Share a short note for the tutor',
                 controller: messageController,
+                maxLines: 3,
+                maxLength: 240,
               ),
               const SizedBox(height: AppSpacing.lg),
 
               AppButton.primary(
-                label: isSending ? 'Sending Request...' : (isResend ? 'Re-send Request' : 'Send Request'),
+                label: isSending
+                    ? 'Sending Request...'
+                    : (isResend ? 'Re-send Request' : 'Send Request'),
                 isLoading: isSending,
                 isFullWidth: true,
                 onPressed: isSending
                     ? null
                     : () async {
                         final nav = Navigator.of(sheetContext);
-                        final messenger = ScaffoldMessenger.of(context);
                         setSheetState(() => isSending = true);
+                        final fromUid =
+                            ref.read(currentAuthUserProvider)?.uid ?? '';
                         try {
-                          final user = FirebaseAuth.instance.currentUser;
-                          final fromUid = user?.uid ?? '';
-                          final fromName = user?.displayName ?? 'Learner';
                           final now = DateTime.now();
 
                           final request = LessonRequest(
                             id: '${fromUid}_${widget.tutor.uid}',
                             fromUid: fromUid,
                             toUid: widget.tutor.uid,
-                            fromName: fromName,
+                            toName: widget.tutor.displayName,
+                            fromName: learnerName,
+                            learnerName: learnerName,
+                            classLevel: learnerPrefs.classLevel,
                             subject: subjectController.text.trim(),
+                            subjects: learnerPrefs.neededSubjects,
+                            city: learnerPrefs.city,
+                            area: learnerPrefs.area,
+                            mode: learnerPrefs.preferredMode,
                             message: messageController.text.trim(),
                             status: LessonRequestStatus.pending,
                             createdAt: now,
@@ -102,17 +129,27 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
                             await repo.createLessonRequest(request);
                           }
 
-                          nav.pop();
-                          messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text('Lesson request sent to tutor!'),
-                              backgroundColor: AppColors.success,
-                            ),
+                          if (!pageContext.mounted) return;
+                          if (sheetContext.mounted) nav.pop();
+                          showAppSnackBar(
+                            pageContext,
+                            'Lesson request sent to tutor!',
+                            isSuccess: true,
                           );
                         } catch (e) {
-                          setSheetState(() => isSending = false);
-                          messenger.showSnackBar(
-                            SnackBar(content: Text(e.toString()), backgroundColor: AppColors.danger),
+                          if (!pageContext.mounted) return;
+                          if (sheetContext.mounted) {
+                            setSheetState(() => isSending = false);
+                          }
+                          final details = formatFirestoreErrorDetails(
+                            e,
+                            'lessonRequests/${fromUid}_${widget.tutor.uid}',
+                          );
+                          showAppSnackBar(
+                            pageContext,
+                            formatUserFriendlyError(e),
+                            isError: true,
+                            diagnostic: details,
                           );
                         }
                       },
@@ -122,10 +159,24 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
         ),
       ),
     );
+    subjectController.dispose();
+    messageController.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final learner = ref.watch(currentAuthUserProvider);
+    final learnerProfileState = learner == null
+        ? null
+        : ref.watch(userProfileProvider(learner.uid));
+    final learnerProfile = learnerProfileState?.asData?.value;
+    final learnerPrefs = LearnerPreferences.fromMap(learnerProfile);
+    final profileName = learnerProfile?['displayName'] as String? ?? '';
+    final learnerName = profileName.trim().isNotEmpty
+        ? profileName.trim()
+        : learner?.displayName?.trim().isNotEmpty == true
+        ? learner!.displayName!.trim()
+        : 'Learner';
     final learnerRequestsState = ref.watch(learnerRequestsStreamProvider);
     final requests = learnerRequestsState.value ?? [];
 
@@ -144,19 +195,32 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
       ),
     );
 
-    final isAccepted = existingRequest.id.isNotEmpty && existingRequest.status == LessonRequestStatus.accepted;
-    final isPending = existingRequest.id.isNotEmpty && existingRequest.status == LessonRequestStatus.pending;
-    final isCancelled = existingRequest.id.isNotEmpty && existingRequest.status == LessonRequestStatus.cancelled;
+    final isAccepted =
+        existingRequest.id.isNotEmpty &&
+        existingRequest.status == LessonRequestStatus.accepted;
+    final isPending =
+        existingRequest.id.isNotEmpty &&
+        existingRequest.status == LessonRequestStatus.pending;
+    final isCancelled =
+        existingRequest.id.isNotEmpty &&
+        existingRequest.status == LessonRequestStatus.cancelled;
 
-    final privatePhoneState = isAccepted ? ref.watch(tutorPrivateContactStreamProvider(widget.tutor.uid)) : null;
+    final privatePhoneState = isAccepted
+        ? ref.watch(tutorPrivateContactStreamProvider(widget.tutor.uid))
+        : null;
     final phone = privatePhoneState?.asData?.value;
 
-    final initials = widget.tutor.displayName.isNotEmpty
-        ? widget.tutor.displayName[0].toUpperCase()
-        : 'T';
+    final initials = nameInitials(widget.tutor.displayName);
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.tutor.displayName)),
+      appBar: AppBar(
+        title: Text(
+          widget.tutor.displayName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
@@ -166,10 +230,14 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
               children: [
                 CircleAvatar(
                   radius: 36,
-                  backgroundColor: AppColors.primaryTeal,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                   child: Text(
                     initials,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -177,13 +245,31 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.tutor.displayName, style: Theme.of(context).textTheme.headlineSmall),
+                      Text(
+                        widget.tutor.displayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       if (widget.tutor.headline.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(widget.tutor.headline, style: Theme.of(context).textTheme.bodySmall),
+                        Text(
+                          widget.tutor.headline,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ],
                       const SizedBox(height: AppSpacing.xs),
-                      StatusChip.present(label: '${widget.tutor.mode.toUpperCase()} MODE'),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: StatusChip.present(
+                          label:
+                              '${switch (widget.tutor.mode.toLowerCase()) {
+                                'online' => 'ONLINE',
+                                'both' => 'BOTH',
+                                _ => 'HOME',
+                              }} MODE',
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -200,8 +286,10 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.location_on_outlined),
-                  title: const Text('Location & Area'),
-                  subtitle: Text('${widget.tutor.city} (${widget.tutor.area})'),
+                  title: const Text('Location'),
+                  subtitle: const Text(
+                    'Approximate area only. Never your exact address.',
+                  ),
                 ),
                 const Divider(),
                 ListTile(
@@ -234,7 +322,10 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
             Text('About & Bio', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             AppCard(
-              child: Text(widget.tutor.bio, style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                widget.tutor.bio,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
           ],
@@ -244,16 +335,28 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: AppColors.successSurface,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.darkSuccessSurface
+                    : AppColors.successSurface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.success, width: 1.0),
+                border: Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.darkSuccessText
+                      : AppColors.success,
+                  width: 1.0,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Request Accepted!',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.success),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? AppColors.darkSuccessText
+                          : AppColors.success,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -263,31 +366,15 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
                   ),
                   if (phone != null && phone.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => makePhoneCall(phone),
-                            icon: const Icon(Icons.phone_rounded, color: AppColors.primaryTeal),
-                            label: const Text('Call Tutor'),
-                          ),
+                    ContactActionButtons(
+                      callLabel: 'Call Tutor',
+                      onCall: () => makePhoneCall(phone),
+                      onWhatsApp: () => launchWhatsAppContact(
+                        rawPhoneNumber: phone,
+                        message: buildTutorContactWhatsAppMessage(
+                          widget.tutor.displayName,
                         ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.success,
-                              foregroundColor: Colors.white,
-                            ),
-                            onPressed: () => launchWhatsAppContact(
-                              rawPhoneNumber: phone,
-                              studentName: widget.tutor.displayName,
-                            ),
-                            icon: const Icon(Icons.chat_bubble_outline_rounded),
-                            label: const Text('WhatsApp'),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ],
@@ -305,9 +392,12 @@ class _TutorDetailScreenState extends ConsumerState<TutorDetailScreen> {
             )
           else if (!isAccepted)
             AppButton.primary(
-              label: isCancelled ? 'Re-send Lesson Request' : 'Send Lesson Request',
+              label: isCancelled
+                  ? 'Re-send Lesson Request'
+                  : 'Send Lesson Request',
               isFullWidth: true,
-              onPressed: () => _showSendRequestModal(isCancelled),
+              onPressed: () =>
+                  _showSendRequestModal(isCancelled, learnerPrefs, learnerName),
             ),
 
           const SizedBox(height: AppSpacing.xl),

@@ -1,140 +1,134 @@
-import 'dart:math' as math;
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-/// Exception thrown when authentication fails with a user-friendly message.
+/// Custom domain exception for Auth operations.
 class AuthException implements Exception {
   final String message;
-  AuthException(this.message);
+  const AuthException(this.message);
 
   @override
   String toString() => message;
 }
 
-/// Result object for Google Sign In flow indicating whether role picker is required for a new user.
-class GoogleAuthResult {
+/// Result payload for Google Sign-In flow.
+class GoogleSignInResult {
   final User user;
   final bool isNewUser;
   final String? existingRole;
 
-  GoogleAuthResult({
+  const GoogleSignInResult({
     required this.user,
     required this.isNewUser,
     this.existingRole,
   });
 }
 
-/// Unambiguous uppercase alphanumeric characters for public IDs (excludes 0, O, 1, I, L)
-const String _kUnambiguousChars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-
+/// Production-ready authentication repository wrapping FirebaseAuth & Cloud Firestore.
 class AuthRepository {
-  static const googleServerClientId =
-      '920270768909-tcueboq3pt1obkvvabtam31fb1svmntq.apps.googleusercontent.com';
-  static Future<void>? _googleSignInInitialization;
-
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
 
-  AuthRepository({
-    FirebaseAuth? auth,
-    FirebaseFirestore? firestore,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance;
+  static const String kWebClientId =
+      '920270768909-tcueboq3pt1obkvvabtam31fb1svmntq.apps.googleusercontent.com';
 
+  static bool _googleSignInInitialized = false;
+  static Future<void>? _googleSignInFuture;
+
+  AuthRepository({FirebaseAuth? auth, FirebaseFirestore? firestore})
+    : _auth = auth ?? FirebaseAuth.instance,
+      _firestore = firestore ?? FirebaseFirestore.instance;
+
+  /// Expose authStateChanges stream for real-time auth state listening
   Stream<User?> get authStateChanges => _auth.authStateChanges();
+
+  /// Expose userChanges stream for profile/verification updates
   Stream<User?> get userChanges => _auth.userChanges();
+
+  /// Expose current logged-in user instance
   User? get currentUser => _auth.currentUser;
 
+  /// Initialize GoogleSignIn client configuration exactly once
   static Future<void> initializeGoogleSignIn() {
-    return _googleSignInInitialization ??=
-        GoogleSignIn.instance.initialize(serverClientId: googleServerClientId);
+    if (_googleSignInInitialized) return Future.value();
+    _googleSignInFuture ??= () async {
+      try {
+        await GoogleSignIn.instance.initialize(serverClientId: kWebClientId);
+        _googleSignInInitialized = true;
+      } catch (_) {}
+    }();
+    return _googleSignInFuture!;
   }
 
-  /// Map Firebase Auth exceptions to friendly, clear English user messages.
-  String _mapFirebaseAuthError(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'user-not-found':
-      case 'wrong-password':
-      case 'invalid-credential':
-      case 'invalid-email':
-        return 'Invalid email address or password.';
-      case 'email-already-in-use':
-        return 'An account already exists with this email address.';
-      case 'weak-password':
-        return 'Password is too weak. Please use at least 8 characters.';
-      case 'user-disabled':
-        return 'This user account has been disabled.';
-      case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
-      case 'network-request-failed':
-        return 'Network connection error. Please check your internet connection.';
-      case 'account-exists-with-different-credential':
-        return 'An account already exists with the same email address using a different sign-in method.';
-      default:
-        return e.message ?? 'An unexpected authentication error occurred.';
-    }
+  /// Send email verification to current logged-in user
+  Future<void> sendEmailVerification([User? user]) async {
+    try {
+      final targetUser = user ?? _auth.currentUser;
+      await targetUser?.sendEmailVerification();
+    } catch (_) {}
   }
 
-  /// Sign up user with email, password, display name, and role.
-  /// Creates users/{uid} and publicIds/{id} atomically in a transaction.
-  /// Deletes the Auth user if Firestore creation fails so user can retry.
+  /// Reload current logged-in user data
+  Future<void> reloadCurrentUser() async {
+    try {
+      await _auth.currentUser?.reload();
+    } catch (_) {}
+  }
+
+  /// Sign Up with Email and Password
   Future<User> signUpWithEmail({
     required String name,
     required String email,
     required String password,
     required String role,
   }) async {
-    User? createdUser;
     try {
+      final normalizedRole = role.toLowerCase().trim();
+      if (!_isValidRole(normalizedRole)) {
+        throw const AuthException('Please select a valid account role.');
+      }
+
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
 
-      createdUser = credential.user;
-      if (createdUser == null) {
-        throw AuthException('Failed to create account. Please try again.');
+      final user = credential.user;
+      if (user == null) {
+        throw const AuthException('Account creation failed. Please try again.');
       }
 
-      final uid = createdUser.uid;
-      final cleanName = name.trim();
-      final cleanEmail = email.trim();
-      final cleanRole = role.toLowerCase().trim();
-
-      // Update Firebase Auth display name
-      await createdUser.updateDisplayName(cleanName);
-      await createdUser.sendEmailVerification();
+      await user.updateDisplayName(name.trim());
 
       // Atomic reservation of publicId and creation of users/{uid} document
       await _createUsersDocumentWithRandomPublicId(
-        uid: uid,
-        displayName: cleanName,
-        email: cleanEmail,
-        photoUrl: createdUser.photoURL,
-        role: cleanRole,
+        user: user,
+        displayName: name.trim(),
+        email: email.trim(),
+        photoUrl: user.photoURL,
+        role: normalizedRole,
+        deleteAuthUserOnFailure: true,
       );
 
-      return createdUser;
+      return user;
     } on FirebaseAuthException catch (e) {
-      if (createdUser != null) {
-        try {
-          await createdUser.delete();
-        } catch (_) {}
-      }
       throw AuthException(_mapFirebaseAuthError(e));
-    } catch (e) {
-      if (createdUser != null) {
-        try {
-          await createdUser.delete();
-        } catch (_) {}
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        throw const AuthException(
+          'Registration failed. Firestore permissions denied.',
+        );
       }
+      throw AuthException(e.message ?? 'Failed to initialize user profile.');
+    } catch (e) {
       if (e is AuthException) rethrow;
-      throw AuthException('Account creation failed. Please try again.');
+      throw AuthException(e.toString());
     }
   }
 
-  /// Log in existing user with email & password.
+  /// Log In with Email and Password
   Future<User> logInWithEmail({
     required String email,
     required String password,
@@ -147,59 +141,64 @@ class AuthRepository {
 
       final user = credential.user;
       if (user == null) {
-        throw AuthException('Could not sign in. Please try again.');
+        throw const AuthException('Login failed. Invalid user credentials.');
       }
+
+      // Check if user has corresponding users/{uid} doc
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (!doc.exists) {
+        throw const AuthException(
+          'Account profile incomplete. Please repair profile or choose role.',
+        );
+      }
+
       return user;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_mapFirebaseAuthError(e));
     } catch (e) {
       if (e is AuthException) rethrow;
-      throw AuthException('Failed to log in. Please try again.');
+      throw AuthException(e.toString());
     }
   }
 
-  /// Sign in with Google using native GoogleSignIn credential.
-  Future<GoogleAuthResult> signInWithGoogle() async {
+  /// Sign In or Sign Up using Google Sign-In
+  Future<GoogleSignInResult> signInWithGoogle() async {
     try {
-      final GoogleSignInAccount account = await GoogleSignIn.instance.authenticate();
-      final GoogleSignInAuthentication googleAuth = account.authentication;
-      final idToken = googleAuth.idToken;
+      await initializeGoogleSignIn();
+      final googleAccount = await GoogleSignIn.instance.authenticate();
 
-      if (idToken == null || idToken.isEmpty) {
-        throw AuthException('Could not retrieve Google ID token. Please verify Google Sign-In is enabled in Firebase Console.');
-      }
-
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        idToken: idToken,
+      final googleAuth = googleAccount.authentication;
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
       );
 
       final userCredential = await _auth.signInWithCredential(credential);
       final user = userCredential.user;
-      if (user == null) {
-        throw AuthException('Google sign-in failed. Please try again.');
-      }
 
-      // Check if user record already exists in users/{uid}
-      final doc = await _firestore.collection('users').doc(user.uid).get();
-      if (doc.exists && doc.data() != null && doc.data()!['role'] != null) {
-        final existingRole = doc.data()!['role'] as String;
-        return GoogleAuthResult(
-          user: user,
-          isNewUser: false,
-          existingRole: existingRole,
+      if (user == null) {
+        throw const AuthException(
+          'Google sign-in failed. Unable to authenticate.',
         );
       }
 
-      return GoogleAuthResult(
-        user: user,
-        isNewUser: true,
-        existingRole: null,
-      );
-    } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled) {
-        throw AuthException('Google sign-in was cancelled.');
+      // Check if user already exists in Firestore
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (!doc.exists) {
+        return GoogleSignInResult(user: user, isNewUser: true);
       }
-      throw AuthException('Google sign-in failed (${e.code}). Please check your configuration.');
+
+      final roleValue = doc.data()?['role'];
+      if (roleValue is! String || !_isValidRole(roleValue)) {
+        throw const AuthException(
+          'This account profile has no valid role and cannot be repaired automatically.',
+        );
+      }
+      final role = roleValue;
+      return GoogleSignInResult(
+        user: user,
+        isNewUser: false,
+        existingRole: role,
+      );
     } on FirebaseAuthException catch (e) {
       throw AuthException(_mapFirebaseAuthError(e));
     } catch (e) {
@@ -208,65 +207,33 @@ class AuthRepository {
     }
   }
 
-  /// Complete role setup for a new Google user
-  Future<void> completeGoogleProfileCreation({
-    required User user,
-    required String role,
-  }) async {
-    await _createUsersDocumentWithRandomPublicId(
-      uid: user.uid,
-      displayName: user.displayName ?? 'TeachLearn User',
-      email: user.email ?? '',
-      photoUrl: user.photoURL,
-      role: role.toLowerCase().trim(),
-    );
-  }
-
-  /// Send password reset email.
+  /// Send Password Reset Email
   Future<void> sendPasswordResetEmail(String email) async {
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
     } on FirebaseAuthException catch (e) {
       throw AuthException(_mapFirebaseAuthError(e));
     } catch (e) {
-      throw AuthException('Failed to send reset email. Please try again.');
+      throw AuthException(e.toString());
     }
   }
 
-  /// Reload currentUser
-  Future<User?> reloadCurrentUser() async {
-    final user = _auth.currentUser;
-    if (user != null) {
-      try {
-        await user.reload();
-        return _auth.currentUser;
-      } on FirebaseAuthException catch (e) {
-        throw AuthException(_mapFirebaseAuthError(e));
-      }
-    }
-    return null;
-  }
-
-  Future<void> sendEmailVerification(User user) async {
-    try {
-      await user.sendEmailVerification();
-    } on FirebaseAuthException catch (e) {
-      throw AuthException(_mapFirebaseAuthError(e));
-    }
-  }
-
-  /// Fetch user document role from Firestore users/{uid}.
-  /// NEVER defaults a missing role to tutor. Throws AuthException if document is missing or invalid.
+  /// Fetch user role from Firestore
   Future<String> getUserRole(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    if (!doc.exists || doc.data() == null) {
-      throw AuthException('User profile record is missing in database.');
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (!doc.exists) {
+        throw const AuthException('User profile record not found.');
+      }
+      final role = doc.data()?['role'] as String?;
+      if (role == null || role.isEmpty) {
+        throw const AuthException('User role is unassigned.');
+      }
+      return role;
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      throw AuthException('Failed to retrieve user role: ${e.toString()}');
     }
-    final role = doc.data()!['role'] as String?;
-    if (role == null || role.isEmpty) {
-      throw AuthException('User role is not assigned.');
-    }
-    return role;
   }
 
   /// Fetch full user profile document from Firestore
@@ -282,14 +249,28 @@ class AuthRepository {
     required String email,
     required String role,
   }) async {
+    final user = _auth.currentUser;
+    if (user == null || user.uid != uid) {
+      throw const AuthException(
+        'The signed-in account changed. Please sign in again.',
+      );
+    }
+    final normalizedRole = role.toLowerCase().trim();
+    if (!_isValidRole(normalizedRole)) {
+      throw const AuthException('Please select a valid account role.');
+    }
     await _createUsersDocumentWithRandomPublicId(
-      uid: uid,
+      user: user,
       displayName: displayName.trim(),
       email: email.trim(),
-      photoUrl: null,
-      role: role.toLowerCase().trim(),
+      photoUrl: user.photoURL,
+      role: normalizedRole,
+      deleteAuthUserOnFailure: false,
     );
   }
+
+  bool _isValidRole(String role) =>
+      role == 'tutor' || role == 'student' || role == 'parent';
 
   /// Sign out current user from FirebaseAuth & GoogleSignIn
   Future<void> signOut() async {
@@ -299,29 +280,138 @@ class AuthRepository {
     await _auth.signOut();
   }
 
+  /// Delete current user account and user subcollections in Firestore, then Auth user
+  Future<void> deleteUserAccount({String? password}) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AuthException('No active user session found.');
+    }
+
+    final uid = user.uid;
+
+    // 1. Re-authenticate
+    final providerData = user.providerData;
+    final isPasswordUser = providerData.any((p) => p.providerId == 'password');
+    final isGoogleUser = providerData.any((p) => p.providerId == 'google.com');
+
+    try {
+      if (isPasswordUser) {
+        if (password == null || password.isEmpty) {
+          throw const AuthException(
+            'Please enter your password to confirm account deletion.',
+          );
+        }
+        final cred = EmailAuthProvider.credential(
+          email: user.email!,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(cred);
+      } else if (isGoogleUser) {
+        await initializeGoogleSignIn();
+        final googleAccount = await GoogleSignIn.instance.authenticate();
+        final googleAuth = googleAccount.authentication;
+        final cred = GoogleAuthProvider.credential(idToken: googleAuth.idToken);
+        await user.reauthenticateWithCredential(cred);
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        throw const AuthException(
+          'Incorrect password. Re-authentication failed.',
+        );
+      }
+      throw AuthException(e.message ?? 'Re-authentication failed.');
+    } on AuthException {
+      rethrow;
+    } catch (e) {
+      throw AuthException('Re-authentication failed: $e');
+    }
+
+    try {
+      final userDoc = _firestore.collection('users').doc(uid);
+      final students = await userDoc.collection('students').get();
+      for (final student in students.docs) {
+        final tests = await student.reference.collection('tests').get();
+        await _deleteDocumentsInChunks(tests.docs);
+      }
+      await _deleteDocumentsInChunks(students.docs);
+
+      for (final subcollection in [
+        'attendance',
+        'holidays',
+        'classes',
+        'sessions',
+      ]) {
+        final documents = await userDoc.collection(subcollection).get();
+        await _deleteDocumentsInChunks(documents.docs);
+      }
+
+      await _firestore
+          .collection('tutorProfiles')
+          .doc(uid)
+          .collection('private')
+          .doc('contact')
+          .delete();
+      await _firestore.collection('tutorProfiles').doc(uid).delete();
+
+      await userDoc.delete();
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        throw const AuthException(
+          "You don't have permission to delete these records.",
+        );
+      }
+      throw AuthException('Failed to delete account data: ${e.message}');
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      throw AuthException('Failed to delete account data: $e');
+    }
+
+    // 6. Delete Auth user (only after Firestore deletion succeeds)
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(e.message ?? 'Failed to delete account credentials.');
+    }
+  }
+
+  Future<void> _deleteDocumentsInChunks(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> documents,
+  ) async {
+    const chunkSize = 400;
+    for (var start = 0; start < documents.length; start += chunkSize) {
+      final end = (start + chunkSize).clamp(0, documents.length);
+      final batch = _firestore.batch();
+      for (final document in documents.sublist(start, end)) {
+        batch.delete(document.reference);
+      }
+      await batch.commit();
+    }
+  }
+
   /// Generate random publicId (TL-7K3Q9) and reserve it atomically in Firestore
   Future<void> _createUsersDocumentWithRandomPublicId({
-    required String uid,
+    required User user,
     required String displayName,
     required String email,
     required String? photoUrl,
     required String role,
+    required bool deleteAuthUserOnFailure,
   }) async {
     const maxAttempts = 5;
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
       final candidateId = _generateRandomPublicId();
       final publicIdRef = _firestore.collection('publicIds').doc(candidateId);
-      final userRef = _firestore.collection('users').doc(uid);
+      final userRef = _firestore.collection('users').doc(user.uid);
 
       try {
         await _firestore.runTransaction<void>((transaction) async {
           final publicIdDoc = await transaction.get(publicIdRef);
           if (publicIdDoc.exists) {
-            throw _CollisionException();
+            throw Exception('Public ID collision. Retrying...');
           }
 
           transaction.set(publicIdRef, {
-            'uid': uid,
+            'uid': user.uid,
             'createdAt': FieldValue.serverTimestamp(),
           });
 
@@ -335,22 +425,54 @@ class AuthRepository {
           });
         });
 
-        // Successfully created atomically!
+        // Reservation succeeded
         return;
-      } on _CollisionException {
-        // Retry with a new code
-        continue;
+      } catch (e) {
+        if (attempt == maxAttempts - 1) {
+          // If transaction failed after 5 attempts, clean up Auth user if newly created
+          if (deleteAuthUserOnFailure) {
+            try {
+              await user.delete();
+            } catch (_) {}
+          }
+          throw const AuthException(
+            'Failed to assign unique Public ID. Please try again.',
+          );
+        }
       }
     }
-
-    throw AuthException('Could not generate a unique public ID. Please try again.');
   }
 
   String _generateRandomPublicId() {
-    final rand = math.Random.secure();
-    final code = List.generate(5, (_) => _kUnambiguousChars[rand.nextInt(_kUnambiguousChars.length)]).join();
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rnd = Random();
+    final code = List.generate(
+      5,
+      (_) => chars[rnd.nextInt(chars.length)],
+    ).join();
     return 'TL-$code';
   }
-}
 
-class _CollisionException implements Exception {}
+  String _mapFirebaseAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'user-not-found':
+      case 'email-not-found':
+        return 'No account exists with this email address.';
+      case 'too-many-requests':
+        return 'Too many reset attempts. Please wait a moment and try again.';
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Incorrect password. Please check your credentials.';
+      case 'email-already-in-use':
+        return 'An account already exists with this email address.';
+      case 'invalid-email':
+        return 'The email address format is invalid.';
+      case 'weak-password':
+        return 'Password is too weak. Please use at least 6 characters.';
+      case 'network-request-failed':
+        return 'Network error. Please check your internet connection.';
+      default:
+        return e.message ?? 'Authentication error occurred.';
+    }
+  }
+}

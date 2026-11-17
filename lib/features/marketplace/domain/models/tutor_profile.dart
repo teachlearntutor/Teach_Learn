@@ -11,6 +11,8 @@ class TutorProfile {
   final String city;
   final String area;
   final String mode; // 'home' | 'online' | 'both'
+  final double? lat;
+  final double? lng;
   final int experienceYears;
   final List<String> availableDays;
   final bool isPublished;
@@ -28,6 +30,8 @@ class TutorProfile {
     required this.city,
     required this.area,
     required this.mode,
+    this.lat,
+    this.lng,
     required this.experienceYears,
     required this.availableDays,
     required this.isPublished,
@@ -58,29 +62,40 @@ class TutorProfile {
       'city': city,
       'area': area,
       'mode': mode,
+      'lat': lat,
+      'lng': lng,
       'experienceYears': experienceYears,
-      'availableDays': availableDays,
       'isPublished': isPublished,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
   }
 
-  factory TutorProfile.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+  factory TutorProfile.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final data = doc.data() ?? {};
+    final rawLat = data['lat'];
+    final rawLng = data['lng'];
     return TutorProfile(
       uid: doc.id,
       displayName: data['displayName'] as String? ?? 'Tutor',
       publicId: data['publicId'] as String? ?? '',
       headline: data['headline'] as String? ?? '',
       bio: data['bio'] as String? ?? '',
-      subjects: (data['subjects'] as List? ?? []).map((e) => e.toString()).toList(),
+      subjects: (data['subjects'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       levels: (data['levels'] as List? ?? []).map((e) => e.toString()).toList(),
       city: data['city'] as String? ?? '',
       area: data['area'] as String? ?? '',
       mode: data['mode'] as String? ?? 'both',
+      lat: rawLat is num ? rawLat.toDouble() : null,
+      lng: rawLng is num ? rawLng.toDouble() : null,
       experienceYears: (data['experienceYears'] as num? ?? 1).toInt(),
-      availableDays: (data['availableDays'] as List? ?? []).map((e) => e.toString()).toList(),
+      availableDays: (data['availableDays'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       isPublished: data['isPublished'] as bool? ?? false,
       createdAt: _parseDate(data['createdAt']),
       updatedAt: _parseDate(data['updatedAt']),
@@ -108,6 +123,9 @@ class TutorProfile {
     String? city,
     String? area,
     String? mode,
+    double? lat,
+    double? lng,
+    bool clearCoordinates = false,
     int? experienceYears,
     List<String>? availableDays,
     bool? isPublished,
@@ -125,6 +143,8 @@ class TutorProfile {
       city: city ?? this.city,
       area: area ?? this.area,
       mode: mode ?? this.mode,
+      lat: clearCoordinates ? null : lat ?? this.lat,
+      lng: clearCoordinates ? null : lng ?? this.lng,
       experienceYears: experienceYears ?? this.experienceYears,
       availableDays: availableDays ?? this.availableDays,
       isPublished: isPublished ?? this.isPublished,

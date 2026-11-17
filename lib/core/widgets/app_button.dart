@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_radii.dart';
 import 'app_loader.dart';
 
@@ -70,8 +69,13 @@ class _AppButtonState extends State<AppButton> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final borderColor = theme.brightness == Brightness.dark
+        ? colors.outlineVariant
+        : colors.outlineVariant.withValues(alpha: 0.45);
     final isDisabled = widget.onPressed == null || widget.isLoading;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
 
     Color backgroundColor;
     Color textColor;
@@ -80,44 +84,29 @@ class _AppButtonState extends State<AppButton> {
     switch (widget.variant) {
       case AppButtonVariant.primary:
         backgroundColor = isDisabled
-            ? (isDark ? AppColors.surfaceDark : AppColors.borderLight)
-            : (isDark ? AppColors.primaryLight : AppColors.primary);
-        textColor = isDisabled
-            ? (isDark ? AppColors.darkInkMuted : AppColors.inkMuted)
-            : Colors.white;
+            ? colors.surfaceContainerHighest
+            : colors.primary;
+        textColor = isDisabled ? colors.onSurfaceVariant : colors.onPrimary;
         break;
 
       case AppButtonVariant.accent:
         backgroundColor = isDisabled
-            ? (isDark ? AppColors.surfaceDark : AppColors.borderLight)
-            : (isDark ? AppColors.secondary : AppColors.primary);
-        textColor = isDisabled
-            ? (isDark ? AppColors.darkInkMuted : AppColors.inkMuted)
-            : Colors.white;
+            ? colors.surfaceContainerHighest
+            : colors.secondary;
+        textColor = isDisabled ? colors.onSurfaceVariant : colors.onSecondary;
         break;
 
       case AppButtonVariant.secondary:
-        backgroundColor = isDark
-            ? AppColors.surfaceDark
-            : AppColors.surfaceLight;
-        textColor = isDisabled
-            ? (isDark ? AppColors.darkInkMuted : AppColors.inkMuted)
-            : (isDark ? AppColors.darkInk : AppColors.ink);
-        borderSide = BorderSide(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          width: 1.0,
-        );
+        backgroundColor = colors.surface;
+        textColor = isDisabled ? colors.onSurfaceVariant : colors.onSurface;
+        borderSide = BorderSide(color: borderColor);
         break;
 
       case AppButtonVariant.ghost:
         backgroundColor = _isPressed
-            ? (isDark
-                  ? AppColors.surfaceDark
-                  : AppColors.borderLight.withValues(alpha: 0.5))
+            ? colors.surfaceContainerHighest
             : Colors.transparent;
-        textColor = isDisabled
-            ? (isDark ? AppColors.darkInkMuted : AppColors.inkMuted)
-            : (isDark ? AppColors.darkInk : AppColors.ink);
+        textColor = isDisabled ? colors.onSurfaceVariant : colors.onSurface;
         break;
     }
 
@@ -142,7 +131,10 @@ class _AppButtonState extends State<AppButton> {
           widget.icon!,
           const SizedBox(width: 8),
         ],
-        if (widget.isFullWidth) Expanded(child: label) else label,
+        if (widget.isFullWidth)
+          Expanded(child: label)
+        else
+          Flexible(child: label),
       ],
     );
 
@@ -151,8 +143,10 @@ class _AppButtonState extends State<AppButton> {
       onTapUp: isDisabled ? null : (_) => setState(() => _isPressed = false),
       onTapCancel: isDisabled ? null : () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 150),
+        scale: _isPressed && !reduceMotion ? 0.98 : 1.0,
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 120),
         curve: Curves.easeOut,
         child: SizedBox(
           width: widget.isFullWidth ? double.infinity : null,

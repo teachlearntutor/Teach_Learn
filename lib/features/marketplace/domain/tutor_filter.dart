@@ -1,7 +1,8 @@
 import 'models/lesson_request.dart';
 import 'models/tutor_profile.dart';
+import 'tutor_location.dart';
 
-enum TutorSortOption { newest, mostExperienced }
+enum TutorSortOption { recommended, newest }
 
 enum TutorRequestUiState { none, pending, accepted, declined, cancelled }
 
@@ -21,57 +22,128 @@ TutorRequestUiState tutorRequestUiState(LessonRequest? request) {
 
 List<TutorProfile> filterTutors({
   required List<TutorProfile> tutors,
-  required String subjectQuery,
-  required String cityQuery,
+  required String searchQuery,
+  required String cityFilter,
+  required String areaFilter,
   required String modeFilter,
   required String levelFilter,
-  required String? selectedSubjectChip,
-  required int minExperience,
+  required String subjectFilter,
+  Set<String>? levelFilters,
+  Set<String>? subjectFilters,
+  GeoCoordinates? currentLocation,
+  double? radiusKm,
 }) {
+  final cleanQuery = searchQuery.trim().toLowerCase();
+  final cleanCity = cityFilter.trim().toLowerCase();
+  final cleanArea = normalizeTutorArea(areaFilter);
+  final cleanSubject = subjectFilter.trim().toLowerCase();
+  final cleanSubjects =
+      subjectFilters
+          ?.map(_normalizeSubject)
+          .toSet() ??
+      const <String>{};
+  final cleanLevels =
+      levelFilters?.map((level) => level.trim().toLowerCase()).toSet() ??
+      const <String>{};
+
   return tutors.where((tutor) {
-    if (cityQuery.isNotEmpty &&
-        !tutor.city.toLowerCase().contains(cityQuery.toLowerCase())) {
+    if (currentLocation != null &&
+        radiusKm != null &&
+        tutor.lat != null &&
+        tutor.lng != null &&
+        distanceBetweenKm(
+              currentLocation,
+              GeoCoordinates(latitude: tutor.lat!, longitude: tutor.lng!),
+            ) >
+            radiusKm) {
       return false;
     }
-    if (modeFilter != 'All' &&
-        tutor.mode != 'both' &&
-        tutor.mode != modeFilter.toLowerCase()) {
-      return false;
+
+    // 1. Live search box (name, subject, city, area, public ID)
+    if (cleanQuery.isNotEmpty) {
+      final searchable = [
+        tutor.displayName,
+        tutor.publicId,
+        tutor.headline,
+        tutor.bio,
+        tutor.city,
+        tutor.area,
+        ...tutor.subjects,
+        ...tutor.levels,
+      ].join(' ').toLowerCase();
+
+      if (!searchable.contains(cleanQuery)) {
+        return false;
+      }
     }
-    if (levelFilter != 'All' &&
-        !tutor.levels.any((l) => l.toLowerCase() == levelFilter.toLowerCase())) {
-      return false;
+
+    // 2. City Filter
+    if (cleanCity.isNotEmpty &&
+        cleanCity != 'all' &&
+        cleanCity != 'all cities') {
+      if (!tutor.city.toLowerCase().contains(cleanCity)) {
+        return false;
+      }
     }
-    if (tutor.experienceYears < minExperience) {
-      return false;
+
+    // 3. Area Filter
+    if (cleanArea.isNotEmpty) {
+      if (!normalizeTutorArea(tutor.area).contains(cleanArea)) {
+        return false;
+      }
     }
-    if (selectedSubjectChip != null &&
-        !tutor.subjects.contains(selectedSubjectChip)) {
-      return false;
+
+    // 4. Mode Filter (home / online / both)
+    if (modeFilter != 'All' && modeFilter.isNotEmpty) {
+      final targetMode = modeFilter.toLowerCase();
+      final tutorMode = tutor.mode.toLowerCase();
+      if (targetMode == 'both'
+          ? tutorMode != 'both'
+          : tutorMode != 'both' && tutorMode != targetMode) {
+        return false;
+      }
     }
-    if (subjectQuery.isNotEmpty) {
-      final subjectMatch =
-          tutor.subjects.any((s) => s.toLowerCase().contains(subjectQuery));
-      final headlineMatch =
-          tutor.headline.toLowerCase().contains(subjectQuery);
-      final nameMatch =
-          tutor.displayName.toLowerCase().contains(subjectQuery);
-      return subjectMatch || headlineMatch || nameMatch;
+
+    // 5. Class Level Filter
+    if (cleanLevels.isNotEmpty) {
+      if (!tutor.levels.any((level) => cleanLevels.contains(level.toLowerCase()))) {
+        return false;
+      }
+    } else if (levelFilter != 'All' && levelFilter.isNotEmpty) {
+      if (!tutor.levels.any(
+        (l) => l.toLowerCase() == levelFilter.toLowerCase(),
+      )) {
+        return false;
+      }
     }
+
+    // 6. Subject Filter
+    if (cleanSubjects.isNotEmpty) {
+      if (!tutor.subjects.any(
+        (subject) => cleanSubjects.contains(_normalizeSubject(subject)),
+      )) {
+        return false;
+      }
+    } else if (cleanSubject.isNotEmpty) {
+      if (!tutor.subjects.any(
+        (subject) => subject.toLowerCase().contains(cleanSubject),
+      )) {
+        return false;
+      }
+    }
+
     return true;
   }).toList();
 }
 
-List<TutorProfile> sortTutors({
-  required List<TutorProfile> tutors,
-  required TutorSortOption sortOption,
-}) {
-  final list = List<TutorProfile>.from(tutors);
-  list.sort((a, b) {
-    if (sortOption == TutorSortOption.mostExperienced) {
-      return b.experienceYears.compareTo(a.experienceYears);
-    }
-    return b.createdAt.compareTo(a.createdAt);
-  });
-  return list;
-}
+String _normalizeSubject(String subject) => switch (
+  subject.trim().toLowerCase()
+) {
+  'math' || 'mathematics' => 'mathematics',
+  'bio' || 'biology' => 'biology',
+  'chem' || 'chemistry' => 'chemistry',
+  'phys' || 'physics' => 'physics',
+  'eng' || 'english' => 'english',
+  'computer' || 'computer science' => 'computer science',
+  _ => subject.trim().toLowerCase(),
+};

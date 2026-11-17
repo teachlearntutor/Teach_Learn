@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/brand_mark.dart';
 import '../../../../core/widgets/google_brand_logo.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/app_snackbar.dart';
 import '../../../../core/widgets/theme_mode_toggle.dart';
 import '../providers/auth_providers.dart';
 import 'google_role_selection_screen.dart';
@@ -48,7 +48,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _showConfirmation = false;
   bool _isSubmitting = false;
   bool _isGoogleSubmitting = false;
-  bool _isResettingPassword = false;
   bool _showHeader = false;
 
   bool get _isTutor => _audience == AuthAudience.tutor;
@@ -100,7 +99,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       if (password.length < 8) {
         return 'Weak password: At least 8 characters required';
       }
-      if (!RegExp(r'[A-Za-z]').hasMatch(password) || !RegExp(r'[0-9]').hasMatch(password)) {
+      if (!RegExp(r'[A-Za-z]').hasMatch(password) ||
+          !RegExp(r'[0-9]').hasMatch(password)) {
         return 'Weak password: Must contain both letters and numbers';
       }
       if (RegExp(r'^(.)\1+$').hasMatch(password)) {
@@ -118,45 +118,103 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+    showAppSnackBar(context, message, isError: true);
   }
 
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: AppColors.success,
-        ),
-      );
+    showAppSnackBar(context, message, isSuccess: true);
   }
 
   Future<void> _handleForgotPassword() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty || !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
-      _showErrorSnackBar('Please enter a valid email address in the field above first.');
-      return;
-    }
-
-    setState(() => _isResettingPassword = true);
+    final resetEmailController = TextEditingController(
+      text: _emailController.text.trim(),
+    );
+    var isSending = false;
+    String? errorMessage;
     try {
-      final repo = ref.read(authRepositoryProvider);
-      await repo.sendPasswordResetEmail(email);
-      if (!mounted) return;
-      _showSuccessSnackBar('Password reset email sent to $email. Please check your inbox.');
-    } catch (e) {
-      if (!mounted) return;
-      _showErrorSnackBar(e.toString());
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Reset your password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: resetEmailController,
+                  autofocus: resetEmailController.text.isEmpty,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email address',
+                    hintText: 'name@example.com',
+                  ),
+                ),
+                if (errorMessage != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    errorMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSending
+                    ? null
+                    : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: isSending
+                    ? null
+                    : () async {
+                        final email = resetEmailController.text.trim();
+                        if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+                            .hasMatch(email)) {
+                          setDialogState(
+                            () => errorMessage = 'Enter a valid email address.',
+                          );
+                          return;
+                        }
+                        setDialogState(() {
+                          isSending = true;
+                          errorMessage = null;
+                        });
+                        try {
+                          await ref
+                              .read(authRepositoryProvider)
+                              .sendPasswordResetEmail(email);
+                          if (!dialogContext.mounted) return;
+                          Navigator.pop(dialogContext);
+                          _showSuccessSnackBar(
+                            'Reset link sent. Check your email.',
+                          );
+                        } catch (error) {
+                          if (!dialogContext.mounted) return;
+                          setDialogState(() {
+                            errorMessage = error.toString();
+                            isSending = false;
+                          });
+                        }
+                      },
+                child: isSending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Send'),
+              ),
+            ],
+          ),
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _isResettingPassword = false);
+      resetEmailController.dispose();
     }
   }
 
@@ -265,6 +323,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final borderColor = theme.brightness == Brightness.dark
+        ? theme.colorScheme.outlineVariant
+        : theme.colorScheme.outlineVariant.withValues(alpha: 0.45);
     final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     final screenSize = MediaQuery.sizeOf(context);
 
@@ -278,9 +340,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         child: Column(
           children: [
             RepaintBoundary(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
+              child: SizedBox(
                 height: headerHeight,
                 child: _buildBrandHeader(context, isKeyboardOpen),
               ),
@@ -288,7 +348,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             Expanded(
               child: SingleChildScrollView(
                 key: ValueKey(_mode),
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
@@ -322,9 +383,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             const SizedBox(height: AppSpacing.sm),
                             Container(
                               decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: Theme.of(context).colorScheme.outlineVariant,
-                                ),
+                                border: Border.all(color: borderColor),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               padding: const EdgeInsets.all(4),
@@ -344,7 +403,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                       label: "I'm looking for a tutor",
                                       selected: !_isTutor,
                                       onTap: () => setState(
-                                        () => _audience = AuthAudience.learnerOrParent,
+                                        () => _audience =
+                                            AuthAudience.learnerOrParent,
                                       ),
                                     ),
                                   ),
@@ -393,7 +453,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                     label: 'Full name',
                                     hint: 'e.g., Ali Ahmed',
                                     controller: _nameController,
-                                    textCapitalization: TextCapitalization.words,
+                                    textCapitalization:
+                                        TextCapitalization.words,
                                     textInputAction: TextInputAction.next,
                                     autofillHints: const [AutofillHints.name],
                                     validator: _validateName,
@@ -417,12 +478,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                       : 'Enter your password',
                                   controller: _passwordController,
                                   obscureText: !_showPassword,
-                                  textInputAction:
-                                      _isSignUp ? TextInputAction.next : TextInputAction.done,
+                                  textInputAction: _isSignUp
+                                      ? TextInputAction.next
+                                      : TextInputAction.done,
                                   autofillHints: const [AutofillHints.password],
                                   validator: _validatePassword,
                                   suffixIcon: IconButton(
-                                    tooltip: _showPassword ? 'Hide password' : 'Show password',
+                                    tooltip: _showPassword
+                                        ? 'Hide password'
+                                        : 'Show password',
                                     onPressed: () => setState(
                                       () => _showPassword = !_showPassword,
                                     ),
@@ -451,10 +515,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                       return null;
                                     },
                                     suffixIcon: IconButton(
-                                      tooltip:
-                                          _showConfirmation ? 'Hide password' : 'Show password',
+                                      tooltip: _showConfirmation
+                                          ? 'Hide password'
+                                          : 'Show password',
                                       onPressed: () => setState(
-                                        () => _showConfirmation = !_showConfirmation,
+                                        () => _showConfirmation =
+                                            !_showConfirmation,
                                       ),
                                       icon: Icon(
                                         _showConfirmation
@@ -468,17 +534,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             ),
                           ),
                           if (!_isSignUp) ...[
-                            Align(
-                              alignment: Alignment.centerRight,
+                            Center(
                               child: TextButton(
-                                onPressed: _isResettingPassword ? null : _handleForgotPassword,
-                                child: _isResettingPassword
-                                    ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : const Text('Forgot password?'),
+                                onPressed: _handleForgotPassword,
+                                child: const Text('Forgot password?'),
                               ),
                             ),
                           ] else ...[
@@ -488,8 +547,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             label: _isSubmitting
                                 ? 'Please wait'
                                 : _isSignUp
-                                    ? 'Create account'
-                                    : 'Log in',
+                                ? 'Create account'
+                                : 'Log in',
                             isLoading: _isSubmitting,
                             isFullWidth: true,
                             onPressed: _isSubmitting ? null : _submit,
@@ -516,7 +575,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             isLoading: _isGoogleSubmitting,
                             icon: const GoogleBrandLogo(size: 20),
                             isFullWidth: true,
-                            onPressed: _isGoogleSubmitting ? null : _handleGoogleSignIn,
+                            onPressed: _isGoogleSubmitting
+                                ? null
+                                : _handleGoogleSignIn,
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           Wrap(
@@ -524,7 +585,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text(
-                                _isSignUp ? 'Already have an account?' : 'New to TeachLearn?',
+                                _isSignUp
+                                    ? 'Already have an account?'
+                                    : 'New to Teach Learn?',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                               TextButton(
@@ -551,10 +614,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Widget _buildBrandHeader(BuildContext context, bool isKeyboardOpen) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final tint = isDark
-        ? AppColors.primaryTealLight.withValues(alpha: 0.14)
-        : AppColors.primaryTeal.withValues(alpha: 0.08);
+    final tint = Theme.of(context).colorScheme.primaryContainer
+        .withValues(alpha: 0.55);
 
     return ColoredBox(
       color: tint,
@@ -605,14 +666,10 @@ class _AudienceSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final colors = theme.colorScheme;
 
     return Material(
-      color: selected
-          ? (isDark
-              ? AppColors.primaryTealLight.withValues(alpha: 0.2)
-              : AppColors.primaryTeal.withValues(alpha: 0.12))
-          : Colors.transparent,
+      color: selected ? colors.primaryContainer : Colors.transparent,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onTap,
@@ -623,9 +680,7 @@ class _AudienceSegment extends StatelessWidget {
             label,
             textAlign: TextAlign.center,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: selected
-                  ? (isDark ? AppColors.primaryTealLight : AppColors.primaryTeal)
-                  : theme.textTheme.bodyMedium?.color,
+              color: selected ? colors.onPrimaryContainer : colors.onSurface,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
           ),

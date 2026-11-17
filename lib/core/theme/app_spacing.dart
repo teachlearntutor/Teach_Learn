@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 /// Spacing scale following an 8pt grid.
 class AppSpacing {
+  static const double s8 = 8.0;
+  static const double s12 = 12.0;
+  static const double s16 = 16.0;
+  static const double s24 = 24.0;
+
   static const double xs = 4.0;
   static const double sm = 8.0;
   static const double md = 16.0;

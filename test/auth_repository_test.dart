@@ -7,23 +7,41 @@ import 'package:mocktail/mocktail.dart';
 import 'package:teach_learn/features/auth/data/auth_repository.dart';
 
 class MockFirebaseAuth extends Mock implements FirebaseAuth {}
+
 class MockFirebaseFirestore extends Mock implements FirebaseFirestore {}
+
 class MockUserCredential extends Mock implements UserCredential {}
+
 class MockUser extends Mock implements User {}
-class MockCollectionReference extends Mock implements CollectionReference<Map<String, dynamic>> {}
-class MockDocumentReference extends Mock implements DocumentReference<Map<String, dynamic>> {}
-class MockDocumentSnapshot extends Mock implements DocumentSnapshot<Map<String, dynamic>> {}
+
+class MockCollectionReference extends Mock
+    implements CollectionReference<Map<String, dynamic>> {}
+
+class MockDocumentReference extends Mock
+    implements DocumentReference<Map<String, dynamic>> {}
+
+class MockDocumentSnapshot extends Mock
+    implements DocumentSnapshot<Map<String, dynamic>> {}
 
 class FakeTransaction extends Fake implements Transaction {
+  final List<Object?> writtenValues = [];
+
   @override
-  Future<DocumentSnapshot<T>> get<T extends Object?>(DocumentReference<T> documentRef) async {
+  Future<DocumentSnapshot<T>> get<T extends Object?>(
+    DocumentReference<T> documentRef,
+  ) async {
     final mockSnapshot = MockDocumentSnapshot();
     when(() => mockSnapshot.exists).thenReturn(false);
     return mockSnapshot as DocumentSnapshot<T>;
   }
 
   @override
-  Transaction set<T extends Object?>(DocumentReference<T> documentRef, T data, [SetOptions? setOptions]) {
+  Transaction set<T extends Object?>(
+    DocumentReference<T> documentRef,
+    T data, [
+    SetOptions? setOptions,
+  ]) {
+    writtenValues.add(data);
     return this;
   }
 }
@@ -57,10 +75,7 @@ void main() {
     mockPublicIdDocRef = MockDocumentReference();
     mockUserDocSnapshot = MockDocumentSnapshot();
 
-    authRepository = AuthRepository(
-      auth: mockAuth,
-      firestore: mockFirestore,
-    );
+    authRepository = AuthRepository(auth: mockAuth, firestore: mockFirestore);
 
     when(() => mockUser.uid).thenReturn('test_uid_123');
     when(() => mockUser.photoURL).thenReturn(null);
@@ -70,70 +85,101 @@ void main() {
 
     when(() => mockUserCredential.user).thenReturn(mockUser);
 
-    when(() => mockFirestore.collection('users')).thenReturn(mockUsersCollection);
-    when(() => mockFirestore.collection('publicIds')).thenReturn(mockPublicIdsCollection);
+    when(() => mockFirestore.collection('users'))
+        .thenReturn(mockUsersCollection);
+    when(() => mockFirestore.collection('publicIds'))
+        .thenReturn(mockPublicIdsCollection);
     when(() => mockUsersCollection.doc(any())).thenReturn(mockUserDocRef);
     when(() => mockUsersCollection.doc()).thenReturn(mockUserDocRef);
-    when(() => mockPublicIdsCollection.doc(any())).thenReturn(mockPublicIdDocRef);
+    when(() => mockPublicIdsCollection.doc(any()))
+        .thenReturn(mockPublicIdDocRef);
     when(() => mockPublicIdsCollection.doc()).thenReturn(mockPublicIdDocRef);
   });
 
   group('AuthRepository Tests', () {
-    test('signUpWithEmail creates Auth user and executes Firestore transaction', () async {
-      when(() => mockAuth.createUserWithEmailAndPassword(
+    test(
+      'signUpWithEmail creates Auth user and executes Firestore transaction',
+      () async {
+        when(
+          () => mockAuth.createUserWithEmailAndPassword(
             email: 'test@example.com',
             password: 'password123',
-          )).thenAnswer((_) async => mockUserCredential);
+          ),
+        ).thenAnswer((_) async => mockUserCredential);
 
-      when(() => mockFirestore.runTransaction<void>(
+        FakeTransaction? recordedTransaction;
+        when(
+          () => mockFirestore.runTransaction<void>(
             any(),
             timeout: any(named: 'timeout'),
             maxAttempts: any(named: 'maxAttempts'),
-          )).thenAnswer((invocation) async {
-        final transactionHandler = invocation.positionalArguments[0] as Future<void> Function(Transaction);
-        final fakeTransaction = FakeTransaction();
-        await transactionHandler(fakeTransaction);
-      });
+          ),
+        ).thenAnswer((invocation) async {
+          final transactionHandler =
+              invocation.positionalArguments[0]
+                  as Future<void> Function(Transaction);
+          final fakeTransaction = FakeTransaction();
+          recordedTransaction = fakeTransaction;
+          await transactionHandler(fakeTransaction);
+        });
 
-      final result = await authRepository.signUpWithEmail(
-        name: 'Test Tutor',
-        email: 'test@example.com',
-        password: 'password123',
-        role: 'tutor',
-      );
+        final result = await authRepository.signUpWithEmail(
+          name: 'Test Tutor',
+          email: 'test@example.com',
+          password: 'password123',
+          role: 'tutor',
+        );
 
-      expect(result.uid, equals('test_uid_123'));
-      verify(() => mockUser.updateDisplayName('Test Tutor')).called(1);
-    });
+        expect(result.uid, equals('test_uid_123'));
+        verify(() => mockUser.updateDisplayName('Test Tutor')).called(1);
+        expect(
+          recordedTransaction!.writtenValues.whereType<Map>().any(
+            (data) => data['role'] == 'tutor',
+          ),
+          isTrue,
+        );
+      },
+    );
 
-    test('Failed Firestore transaction deletes the Auth user so user can retry', () async {
-      when(() => mockAuth.createUserWithEmailAndPassword(
+    test(
+      'Failed Firestore transaction deletes the Auth user so user can retry',
+      () async {
+        when(
+          () => mockAuth.createUserWithEmailAndPassword(
             email: 'fail@example.com',
             password: 'password123',
-          )).thenAnswer((_) async => mockUserCredential);
+          ),
+        ).thenAnswer((_) async => mockUserCredential);
 
-      when(() => mockFirestore.runTransaction<void>(
+        when(
+          () => mockFirestore.runTransaction<void>(
             any(),
             timeout: any(named: 'timeout'),
             maxAttempts: any(named: 'maxAttempts'),
-          )).thenAnswer((_) => Future<void>.error(Exception('Firestore write error')));
+          ),
+        ).thenAnswer(
+          (_) => Future<void>.error(Exception('Firestore write error')),
+        );
 
-      await expectLater(
-        () => authRepository.signUpWithEmail(
-          name: 'Fail User',
-          email: 'fail@example.com',
-          password: 'password123',
-          role: 'student',
-        ),
-        throwsA(isA<AuthException>()),
-      );
+        await expectLater(
+          () => authRepository.signUpWithEmail(
+            name: 'Fail User',
+            email: 'fail@example.com',
+            password: 'password123',
+            role: 'student',
+          ),
+          throwsA(isA<AuthException>()),
+        );
 
-      verify(() => mockUser.delete()).called(1);
-    });
+        verify(() => mockUser.delete()).called(1);
+      },
+    );
 
     test('getUserRole throws AuthException when role is missing (never defaults to tutor)', () async {
-      when(() => mockUsersCollection.doc('no_role_uid')).thenReturn(mockUserDocRef);
-      when(() => mockUserDocRef.get()).thenAnswer((_) async => mockUserDocSnapshot);
+      when(() => mockUsersCollection.doc('no_role_uid'))
+          .thenReturn(mockUserDocRef);
+      when(() => mockUserDocRef.get())
+          .thenAnswer((_) async => mockUserDocSnapshot);
       when(() => mockUserDocSnapshot.exists).thenReturn(false);
 
       await expectLater(
